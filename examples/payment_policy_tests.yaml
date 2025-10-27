@@ -1,0 +1,56 @@
+name: payment_policy_test_suite
+description: Test suite for payment_policy
+tests:
+- name: valid_payment_allowed
+  input:
+    principal:
+      id: agent-123
+      roles: []
+    resource:
+      kind: payment
+      id: payment-456
+      attr:
+        amount: 30
+        recipient: vendor@example.com
+        sanctioned_entities:
+        - evil@bad.com
+    actions:
+    - execute
+  expected:
+  - action: execute
+    effect: EFFECT_ALLOW
+- name: excessive_amount_denied
+  input:
+    principal:
+      id: agent-123
+      roles: []
+    resource:
+      kind: payment
+      id: payment-789
+      attr:
+        amount: 100
+        recipient: vendor@example.com
+        sanctioned_entities: []
+    actions:
+    - execute
+  expected:
+  - action: execute
+    effect: EFFECT_DENY
+- name: sanctioned_entity_denied
+  input:
+    principal:
+      id: agent-123
+      roles: []
+    resource:
+      kind: payment
+      id: payment-999
+      attr:
+        amount: 25
+        recipient: evil@bad.com
+        sanctioned_entities:
+        - evil@bad.com
+    actions:
+    - execute
+  expected:
+  - action: execute
+    effect: EFFECT_DENY

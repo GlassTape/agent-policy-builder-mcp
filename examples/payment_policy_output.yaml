@@ -1,0 +1,17 @@
+apiVersion: api.cerbos.dev/v1
+description: AI agent payment execution policy with amount limits and sanctions screening
+resourcePolicy:
+  version: 1.0.0
+  resource: payment
+  rules:
+  - actions:
+    - execute
+    effect: EFFECT_ALLOW
+    condition:
+      match:
+        expr: (request.resource.attr.amount > 0) && (request.resource.attr.amount <= 50) && (!(request.resource.attr.recipient in request.resource.attr.sanctioned_entities))
+    description: Allow payment execution with amount limits and sanctions check
+  - actions:
+    - '*'
+    effect: EFFECT_DENY
+    description: Default deny all other actions
