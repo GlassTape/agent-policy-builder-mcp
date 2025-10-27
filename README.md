@@ -4,19 +4,19 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
 
-> **Transform natural language into production-ready Cerbos policies via MCP**
+> **Transform natural language into production-ready AI governance policies.**
 
-An open-source [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that converts natural language security requirements into validated **Cerbos YAML policies**. Designed for AI agent governance, policy-as-code workflows, and zero-trust security implementations.
+GlassTape **Policy Builder** is an open-source [MCP server](https://modelcontextprotocol.io) that converts natural-language security requirements into **Cerbos YAML policies** with automated validation, testing, and red-teaming.  
+It enables security and engineering teams to integrate **AI agents and applications** with **policy-as-code** frameworks—bringing zero-trust guardrails to tool-call interception, data access, and model workflows.
 
-## ✨ Features
+## 🚀 Features
 
-- 🔒 **Secure by Default** - Air-gapped operation, no mandatory cloud dependencies
-- ⚡ **Client-LLM Mode** - Works with any MCP client's LLM (Cursor, Claude, Q)
-- 🎯 **Deterministic Generation** - Simple ICP JSON → validated Cerbos YAML
-- 🧪 **Automated Validation** - Uses `cerbos compile` and `cerbos test` for verification
-- 🛡️ **Security Analysis** - Built-in red-team checks and compliance mapping
-- 🧩 **MCP Native** - Seamless IDE integration via Model Context Protocol
-- 📚 **Template Library** - Pre-built patterns for finance, healthcare, AI safety
+- ⚙️ **Natural-Language to Policy** – Generate Cerbos policies from plain English using Claude or AWS Q
+- 🧠 **Automated Validation** – Uses the Cerbos CLI (`cerbos compile`, `cerbos test`) for syntax and logic checks
+- 🧪 **Red-Team Analysis** – Detects evasion, injection, and logic flaws automatically
+- 🧩 **MCP Integration** – Works natively in IDEs like **Cursor**, **Zed**, and **Claude Desktop**
+- 🔒 **Air-Gapped Operation** – Local-first design with no external dependencies
+- 🧾 **Compliance Mapping** – Built-in templates for SOX, HIPAA, PCI-DSS, and EU AI Act
 
 ## 🚀 Quick Start
 
@@ -126,19 +126,73 @@ validate_policy with policy_yaml: "<your-cerbos-yaml>"
 - Ensure you have Python 3.10 or higher
 - Try reinstalling: `pip uninstall glasstape-policy-builder-mcp && pip install glasstape-policy-builder-mcp`
 
-## 🛠️ Available Tools
+## 🦭 Available Tools
 
-| Tool | Description |
-|------|-------------|
-| `generate_policy` | Transform natural language → Cerbos YAML |
-| `validate_policy` | Check policy syntax with `cerbos compile` |
-| `test_policy` | Run test suites with `cerbos test` |
-| `suggest_improvements` | Perform security analysis |
-| `list_templates` | Browse built-in policy templates |
+When connected via MCP, you can use these tools in Claude or your IDE:
 
-## 📋 Examples
+| Tool                   | What it does                                               |
+| ---------------------- | ---------------------------------------------------------- |
+| `generate_policy`      | Transform natural language → validated Cerbos YAML         |
+| `validate_policy`      | Check policy syntax with `cerbos compile`                  |
+| `test_policy`          | Run test suites against your policy                        |
+| `suggest_improvements` | Analyze for security gaps (rate limits, SOD, sanctions)    |
+| `list_templates`       | Browse built-in templates (finance, healthcare, AI safety) |
 
-Complete policy examples for all 5 template categories:
+**Example workflow:**
+
+```
+1. "Generate a payment policy for AI agents with $50 limit..."
+   → Claude calls generate_policy
+   
+2. "Create a comprehensive test suite for this policy"
+   → Claude calls generate_test_suite
+   
+3. "Add hourly spending limits and sanction checks"
+   → Claude calls suggest_improvements
+   
+4. "Save this policy bundle"
+   → Claude calls save_policy
+```
+
+## 🧪 Example Output
+
+**Input:**
+
+```
+"Allow AI agents to execute payments up to $50. Block sanctioned entities. 
+Limit cumulative hourly amount to $50. Maximum 5 transactions per 5 minutes."
+```
+
+**Generated Policy:**
+
+```yaml
+# policies/payment_policy.yaml
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  version: "1.0.0"
+  resource: "payment"
+  rules:
+    - actions: ["execute"]
+      effect: EFFECT_ALLOW
+      condition:
+        match:
+          expr: >
+            request.resource.attr.amount > 0 &&
+            request.resource.attr.amount <= 50 &&
+            !(request.resource.attr.recipient in request.resource.attr.sanctioned_entities) &&
+            (request.resource.attr.cumulative_amount_last_hour + request.resource.attr.amount) <= 50 &&
+            request.resource.attr.agent_txn_count_5m < 5
+    - actions: ["*"]
+      effect: EFFECT_DENY
+```
+
+**Plus:**
+
+* ✅ 15+ automated test cases
+* ✅ Validated by `cerbos compile`
+* ✅ Ready-to-deploy bundle
+
+## 📋 Complete Examples
 
 | Category | Example | Description |
 |----------|---------|-------------|
@@ -148,35 +202,21 @@ Complete policy examples for all 5 template categories:
 | **Data Access** | [pii_export_policy.md](examples/pii_export_policy.md) | GDPR-compliant PII export control |
 | **System** | [admin_access_policy.md](examples/admin_access_policy.md) | Admin access with MFA |
 
-### Quick Example
-
-**Natural Language Input:**
-```
-Allow AI agents to execute payments up to $50. Block sanctioned entities.
-```
-
-**Generated Cerbos YAML:**
-```yaml
-apiVersion: api.cerbos.dev/v1
-resourcePolicy:
-  resource: payment
-  rules:
-    - actions: ["execute"]
-      effect: EFFECT_ALLOW
-      condition:
-        match:
-          expr: "request.resource.attr.amount <= 50"
-    - actions: ["*"]
-      effect: EFFECT_DENY
-```
-
-**Plus:** Automated test suite and security analysis.
-
 See [examples/README.md](examples/README.md) for complete examples.
 
-## 🏗️ Architecture
+## 🧱 Architecture
 
-Simple ICP JSON → Cerbos YAML → Validation → Security Analysis
+```mermaid
+flowchart TD
+  A["Natural-language policy request"] --> B["GlassTape MCP Server"]
+  B --> C["Intermediate Canonical Policy - JSON"]
+  C --> D["Cerbos YAML policy generation"]
+  D --> E["Cerbos CLI validation + testing"]
+  E --> F["Ready-to-deploy policy bundle"]
+```
+
+**Key Innovation:**
+ICP (Intermediate Canonical Policy) serves as a language-agnostic intermediate representation, enabling deterministic generation, policy portability, and formal verification.
 
 ## 🧪 Development
 
@@ -193,6 +233,32 @@ pytest
 black src/ tests/
 ```
 
-## 📄 License
+## 🤝 Contributing
 
-Apache 2.0
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+**Quick Links:**
+
+* [Code of Conduct](CODE_OF_CONDUCT.md)
+* [Security Policy](SECURITY.md)
+
+---
+
+## 💪 License
+
+Released under the [Apache 2.0 License](LICENSE).
+© 2025 GlassTape, Inc.
+
+---
+
+## 💡 Links
+
+* 🌐 [GlassTape Website](https://glasstape.ai)
+* 📚 [Documentation](https://docs.glasstape.com/agent-policy-builder)
+* 🧱 [Cerbos Documentation](https://docs.cerbos.dev)
+* 🧩 [Model Context Protocol](https://modelcontextprotocol.io)
+* 🐛 [Report Issues](https://github.com/glasstape/glasstape-policy-builder-mcp/issues)
+
+---
+
+**Built with ❤️ by [GlassTape](https://glasstape.ai)** — *Making AI agents secure by default.*
