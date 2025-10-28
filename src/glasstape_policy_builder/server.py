@@ -11,7 +11,7 @@ import logging
 import sys
 from pathlib import Path
 
-from mcp import Server
+from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
 from .tools import register_tools
@@ -107,5 +107,9 @@ async def validate_environment():
         raise
 
 
-if __name__ == "__main__":
+def cli_main():
+    """CLI entry point for the MCP server."""
     asyncio.run(main())
+
+if __name__ == "__main__":
+    cli_main()

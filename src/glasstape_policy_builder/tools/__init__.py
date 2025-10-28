@@ -1,6 +1,7 @@
 """MCP tools for policy generation and analysis."""
 
-from mcp import Server, types
+from mcp.server import Server
+from mcp import types
 from typing import Dict, Any, List, Optional
 
 from .generate_policy import generate_policy_tool

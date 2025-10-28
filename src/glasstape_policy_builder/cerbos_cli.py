@@ -27,7 +27,7 @@ class CerbosCLI:
         """Check if Cerbos CLI is installed"""
         try:
             result = subprocess.run(
-                ['cerbos', 'version'],
+                ['cerbos', '--version'],
                 capture_output=True,
                 text=True,
                 timeout=5,
