@@ -33,22 +33,26 @@ curl -L https://github.com/cerbos/cerbos/releases/latest/download/cerbos_Linux_x
   -o /usr/local/bin/cerbos && chmod +x /usr/local/bin/cerbos
 
 # Verify installation
-cerbos version
+cerbos --version
 ```
 
-### 2. Install the MCP Server
+### 2. Install from Source
 
 ```bash
+# Clone the repository
+git clone https://github.com/glasstape/glasstape-policy-builder-mcp.git
+cd glasstape-policy-builder-mcp/agent-policy-builder-mcp
+
 # Basic installation
-pip install glasstape-policy-builder-mcp
+pip install -e .
 
 # With optional LLM support (for server-side natural language parsing)
-pip install glasstape-policy-builder-mcp[anthropic]  # Anthropic Claude
-pip install glasstape-policy-builder-mcp[openai]     # OpenAI GPT
-pip install glasstape-policy-builder-mcp[llm]        # All LLM providers
+pip install -e ".[anthropic]"  # Anthropic Claude
+pip install -e ".[openai]"     # OpenAI GPT
+pip install -e ".[llm]"        # All LLM providers
 
 # Development installation
-pip install glasstape-policy-builder-mcp[dev]
+pip install -e ".[dev]"
 ```
 
 ### 3. Configure Your MCP Client
@@ -110,21 +114,29 @@ validate_policy with policy_yaml: "<your-cerbos-yaml>"
 
 **Cerbos CLI not found**:
 - Ensure Cerbos CLI is installed and in your PATH
-- Run `cerbos version` to verify installation
+- Run `cerbos --version` to verify installation (note: `--version` not `version`)
 
 **MCP server not connecting**:
 - Check your MCP client configuration
 - Restart your IDE after configuration changes
-- Verify the command path is correct
+- Verify the command path is correct: `which glasstape-policy-builder-mcp`
+
+**Installation fails with "Unable to determine which files to ship"**:
+- This is a known hatch build issue - ensure you're in the correct directory
+- The pyproject.toml should include `[tool.hatch.build.targets.wheel]` configuration
+
+**Import errors with MCP**:
+- Ensure you have the correct MCP imports: `from mcp.server import Server`
+- Try reinstalling: `pip install -e . --force-reinstall`
 
 **Policy validation fails**:
 - Check YAML syntax in generated policy
 - Ensure Cerbos CLI is working: `cerbos compile --help`
 - Review error messages for specific issues
 
-**Import errors**:
+**Command not found after installation**:
 - Ensure you have Python 3.10 or higher
-- Try reinstalling: `pip uninstall glasstape-policy-builder-mcp && pip install glasstape-policy-builder-mcp`
+- Check that the entry point is correctly configured in pyproject.toml
 
 ## 🦭 Available Tools
 

@@ -52,7 +52,7 @@ dev = [
 ]
 
 [project.scripts]
-glasstape-policy-builder-mcp = "glasstape_policy_builder.server:main"
+glasstape-policy-builder-mcp = "glasstape_policy_builder.server:cli_main"
 
 [project.urls]
 Homepage = "https://glasstape.ai"
@@ -66,3 +66,6 @@ target-version = ['py310']
 [tool.ruff]
 line-length = 88
 target-version = "py310"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/glasstape_policy_builder"]

@@ -708,23 +708,25 @@ curl -L https://github.com/cerbos/cerbos/releases/latest/download/cerbos_Linux_x
   -o /usr/local/bin/cerbos && chmod +x /usr/local/bin/cerbos
 
 # Verify installation
-cerbos version
+cerbos --version
 ```
 
 ### Installation
 
-**Basic Installation** (Client-LLM mode - recommended):
+**Install from Source** (Client-LLM mode - recommended):
 ```bash
-pip install glasstape-policy-builder-mcp
+git clone https://github.com/glasstape/glasstape-policy-builder-mcp.git
+cd glasstape-policy-builder-mcp/agent-policy-builder-mcp
+pip install -e .
 ```
 
 **With Optional LLM Support** (Server-LLM mode):
 ```bash
 # Anthropic Claude
-pip install glasstape-policy-builder-mcp[anthropic]
+pip install -e ".[anthropic]"
 
 # All LLM providers
-pip install glasstape-policy-builder-mcp[llm]
+pip install -e ".[llm]"
 ```
 
 ### MCP Client Configuration
