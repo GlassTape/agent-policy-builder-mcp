@@ -19,12 +19,18 @@ async def register_tools(server: Server):
         return [
             types.Tool(
                 name="generate_policy",
-                description="Generate Cerbos YAML policy from ICP JSON or natural language",
+                description="Convert natural language guardrails into enterprise-grade Cerbos YAML policies",
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "icp": {"type": "object", "description": "ICP JSON structure (preferred)"},
-                        "nl_requirements": {"type": "string", "description": "Natural language requirements"}
+                        "nl_requirements": {
+                            "type": "string",
+                            "description": "Plain English description of AI guardrail or security policy"
+                        },
+                        "icp": {
+                            "type": "object",
+                            "description": "Structured policy JSON (for automation workflows)"
+                        }
                     }
                 }
             ),

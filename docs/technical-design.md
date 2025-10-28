@@ -1,356 +1,385 @@
 # GlassTape Agent Policy Builder: MVP Technical Implementation
 
-**Version 1.0 - MVP Launch Edition (Python)**  
-*Simplified MCP Server Architecture for Cerbos Policy Generation*
+**Version 1.1 - Implementation-Aligned Edition (Python)**  
+*MCP Server for Natural Language → Cerbos Policy Generation*
 
 ---
 
 ## Table of Contents
 
-1. [Executive Overview](#executive-overview)
-2. [MVP Scope & Principles](#mvp-scope--principles)
+1. [Executive Summary](#executive-summary)
+2. [MVP Scope & Implementation Status](#mvp-scope--implementation-status)  
 3. [System Architecture](#system-architecture)
-4. [Simple ICP Format](#simple-icp-format)
-5. [Core Components](#core-components)
-6. [MCP Tool Implementation](#mcp-tool-implementation)
-7. [Cerbos Integration](#cerbos-integration)
-8. [Template Library](#template-library)
-9. [Testing Strategy](#testing-strategy)
-10. [Deployment Guide](#deployment-guide)
-11. [Phase Roadmap](#phase-roadmap)
+4. [Operating Modes](#operating-modes)
+5. [MCP Tools](#mcp-tools)
+6. [Core Components](#core-components)
+7. [Simple ICP Format](#simple-icp-format)
+8. [Customer Workflow Examples](#customer-workflow-examples)
+9. [Template Library](#template-library)
+10. [Security Analysis](#security-analysis)
+11. [Testing Strategy](#testing-strategy)
+12. [Deployment Guide](#deployment-guide)
+13. [Phase Roadmap](#phase-roadmap)
+14. [Appendices](#appendices)
 
 ---
 
-## Executive Overview
+## Executive Summary
 
-### What This Is
+### Vision
+Let developers/security teams write guardrails in plain English inside an MCP-compatible IDE (Claude Desktop, Cursor, Zed, Q), and get back a validated Cerbos YAML policy and tests—ready to ship.
 
-The **GlassTape Agent Policy Builder** MVP is a lightweight MCP server written in **Python** that converts natural language security requirements into **validated Cerbos YAML policies**. It focuses on core functionality: generation, validation, and basic security analysis.
+### One-liner
+**Write guardrails in natural language, get enterprise-grade Cerbos policies instantly.**
 
-### MVP Philosophy
+### What This Delivers
+The **GlassTape Agent Policy Builder** is a production-ready MCP server that converts natural language security requirements into **validated Cerbos YAML policies**. Built with Python 3.10+, it emphasizes security, determinism, and air-gapped operation.
 
-**Do One Thing Well**: Generate production-ready Cerbos policies from natural language, with automated validation and testing.
+### Key Value Propositions
+- 🎯 **Zero Learning Curve**: Write policies in plain English, not YAML or JSON
+- 🔒 **Enterprise Security**: Client-LLM mode by default, no mandatory cloud dependencies
+- ✅ **Production Ready**: Automated validation via Cerbos CLI, comprehensive test generation
+- 🚀 **Instant Results**: Complete policy bundle in <10 seconds
+- 🏢 **Compliance Built-in**: Templates for HIPAA, SOX, GDPR, PCI-DSS
 
-**What We ARE Building**:
-- ✅ Natural language → Cerbos YAML
-- ✅ Automated validation (cerbos compile)
-- ✅ Test generation & execution
-- ✅ Basic red-team analysis (5 checks)
-- ✅ Template library (5 templates)
-- ✅ Local-first, air-gap capable
-
-### Technology Stack
-
+### Technology Architecture
+```mermaid
+graph TB
+    User[Developer/Security Team] --> IDE[MCP-Compatible IDE]
+    IDE --> LLM[Client LLM]
+    LLM --> ICP[ICP JSON]
+    ICP --> Server[Policy Builder MCP Server]
+    Server --> Validator[ICP Validator]
+    Server --> Generator[Cerbos Generator]
+    Server --> CLI[Cerbos CLI]
+    Server --> Analyzer[Security Analyzer]
+    CLI --> Output[Policy Bundle]
+    
+    style User fill:#e1f5fe
+    style Output fill:#c8e6c9
+    style Server fill:#fff3e0
 ```
-MCP Client (Claude, Cursor, Zed, Q)
-    │
-    │ Client's LLM converts NL → ICP JSON
-    ↓
-MCP Protocol (stdio)
-    ↓
-Python 3.10+ Server (LLM-agnostic)
-    ↓
-Simple ICP (JSON) Validation
-    ↓
-Cerbos YAML Generator
-    ↓
-Cerbos CLI (local binary)
-    ↓
-Policy Bundle (YAML + Tests)
-
-Optional: Server-side LLM adapter
-(Anthropic/Bedrock/OpenAI)
-```
-
-**Core Dependencies:**
-- Python 3.10+
-- `mcp` - MCP SDK for Python
-- `pyyaml` - YAML processing
-- `cerbos` CLI (local binary)
-
-**Optional Dependencies:**
-- `anthropic` - For server-side NL parsing (if LLM_PROVIDER=anthropic)
-- `boto3` - For AWS Bedrock (if LLM_PROVIDER=bedrock)
-- `openai` - For OpenAI (if LLM_PROVIDER=openai)
 
 ---
 
-## MVP Scope & Principles
+## MVP Scope & Implementation Status
 
-### Core Functionality Matrix
+✅ **Natural language → Cerbos YAML** (via MCP client's LLM; no server SDKs or keys required)  
+✅ **Validation & tests** with Cerbos CLI (cerbos compile, cerbos test)  
+✅ **Basic security analysis** (5 checks: default-deny, rate limits, sanctions, input validation, roles)  
+✅ **Template library** (finance, healthcare, AI safety, data access, system)  
+✅ **Local-first / air-gapped operation** by default  
+✅ **Optional server-side LLM adapter** (env-gated) for teams without LLM-capable IDEs  
 
-| Feature | MVP Status | Notes |
-|---------|-----------|-------|
-| ICP validation | ✅ Launch | JSON schema validation |
-| Cerbos YAML generation | ✅ Launch | ICP → Cerbos conversion |
-| Policy validation | ✅ Launch | `cerbos compile` |
-| Test generation | ✅ Launch | Positive + negative cases |
-| Test execution | ✅ Launch | `cerbos test` |
-| Basic red-team | ✅ Launch | 5 essential checks (static) |
-| Template library | ✅ Launch | 5 core templates |
-| Client-side NL parsing | ✅ Launch | Via MCP client's LLM |
-| Server-side NL parsing | ⚠️ Optional | Via LLM adapter (env-gated) |
-
-
-### Design Principles
-
-1. **Simplicity First** - Flat data structures, linear flow
-2. **Local-First** - Air-gap capable, no cloud dependencies
-3. **Deterministic** - Same input → same output
-4. **Extensible** - Easy to add features in Phase 2
-5. **Developer-Friendly** - Clear errors, helpful messages
-6. **Pythonic** - Follow Python best practices and idioms
-7. **LLM-Agnostic** - Works with any MCP client's LLM
-
----
-
-## Operational Modes
-
-The Policy Builder supports two runtime modes:
-
-### Mode 1: Client-LLM (Default, Recommended)
-
-**How it works:**
-1. MCP client (Cursor/Claude/Q) uses its own LLM to convert natural language → ICP JSON
-2. Client calls `generate_policy` with `icp` parameter
-3. Server performs deterministic transforms: ICP → Cerbos YAML → Validation → Tests
-4. **No cloud dependencies, fully air-gapped**
-
-**Benefits:**
-- ✅ No API keys required
-- ✅ Works offline (if client uses local LLM)
-- ✅ Works with any MCP client
-- ✅ Better security posture
-- ✅ Simpler deployment
-
-**Client-side prompt** (for IDE to generate ICP):
-```
-You are a policy normalizer. Convert the user's natural language requirements
-into ICP JSON for Cerbos generation. Output ONLY valid JSON matching this schema:
-
-{
-  "version": "1.0.0",
-  "metadata": {
-    "name": "snake_case_name",
-    "description": "what it does",
-    "resource": "resource_kind",
-    "compliance": ["SOX","HIPAA","PCI-DSS","GDPR"],
-    "tags": ["ai","guardrail","risk-high"]
-  },
-  "policy": {
-    "resource": "resource_kind",
-    "version": "1.0.0",
-    "rules": [
-      {
-        "actions": ["execute"],
-        "effect": "EFFECT_ALLOW",
-        "roles": ["agent","service"],
-        "conditions": [
-          "request.resource.attr.amount > 0",
-          "request.resource.attr.amount <= 50"
-        ],
-        "description": "Allow with constraints"
-      },
-      {
-        "actions": ["*"],
-        "effect": "EFFECT_DENY",
-        "conditions": [],
-        "description": "Default deny"
-      }
-    ]
-  },
-  "tests": [
-    {"name":"valid","category":"positive","input":{...},"expected":"EFFECT_ALLOW"},
-    {"name":"invalid","category":"negative","input":{...},"expected":"EFFECT_DENY"}
-  ]
-}
-```
-
-### Mode 2: Server-LLM (Optional)
-
-**How it works:**
-1. User provides natural language requirements
-2. Server uses configured LLM adapter (Anthropic/Bedrock/OpenAI) to generate ICP
-3. Server continues with deterministic transforms
-
-**Requires:**
-```bash
-export LLM_PROVIDER=anthropic  # or bedrock, openai
-export ANTHROPIC_API_KEY=sk-ant-...  # or AWS_* credentials, OPENAI_API_KEY
-```
-
-**Benefits:**
-- ✅ One-step workflow from natural language
-- ✅ Good for teams without LLM-capable IDE
-
-**Trade-offs:**
-- ⚠️ Requires API keys
-- ⚠️ Network dependency
-- ⚠️ Additional secrets to manage
-
-### Choosing a Mode
-
-**Use Client-LLM mode if:**
-- Using Cursor, Claude Desktop, or Q with LLM capabilities
-- Want fully air-gapped operation
-- Prefer not to manage API keys
-- Need maximum security
-
-**Use Server-LLM mode if:**
-- Using basic IDEs without LLM
-- Want simpler client integration
-- Already have LLM API infrastructure
+**Deliberately not included**: cryptographic signing, YAML↔ICP round-trips as a core path, heavy server-LLM dependencies.
 
 ---
 
 ## System Architecture
 
-### High-Level Flow
+### High-Level Data Flow
 
 ```mermaid
 flowchart TD
-    A[Natural Language Input] --> B[MCP Server]
-    B --> C[Intent Parser - Claude]
-    C --> D[Simple ICP - JSON]
-    D --> E[Cerbos YAML Generator]
-    E --> F[Cerbos CLI Validator]
-    F --> G{Valid?}
-    G -->|Yes| H[Test Generator]
-    G -->|No| I[Error Message]
-    H --> J[Cerbos Test Runner]
-    J --> K[Policy Bundle]
-    K --> L[Save to Filesystem]
+    A[User: Natural Language Policy Request] --> B[MCP Client IDE]
+    B --> C[Client LLM: NL → ICP JSON]
+    C --> D[MCP Server: Policy Builder]
+    D --> E[ICP Validator]
+    E --> F[Cerbos Generator]
+    F --> G[Cerbos CLI Validation]
+    G --> H[Security Analyzer]
+    H --> I[Policy Bundle Output]
+    
+    J[Optional: Server LLM] -.-> D
+    K[Template Library] --> D
+    L[Test Generator] --> F
+    
+    style A fill:#e3f2fd
+    style I fill:#e8f5e8
+    style D fill:#fff3e0
+    style J fill:#ffebee,stroke-dasharray: 5 5
 ```
 
-### Component Architecture
+### Component Interaction
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    MCP Server Core                       │
-│                     (Python 3.10+)                       │
-├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │              Tool Handler (5 tools)              │  │
-│  │  • generate_policy                               │  │
-│  │  • validate_policy                               │  │
-│  │  • test_policy                                   │  │
-│  │  • suggest_improvements                          │  │
-│  │  • list_templates                                │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │            Natural Language Parser               │  │
-│  │         (Anthropic Claude Integration)           │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │             Simple ICP Generator                 │  │
-│  │          (Flat Dict Structure)                   │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │           Cerbos YAML Generator                  │  │
-│  │        (ICP → Cerbos YAML Converter)             │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │              Cerbos CLI Interface                │  │
-│  │         (compile, test commands)                 │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │          Simple Red-Team Analyzer                │  │
-│  │            (5 Basic Checks)                      │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │             Template Library                     │  │
-│  │          (5 Pre-built Templates)                 │  │
-│  └──────────────────────────────────────────────────┘  │
-│                                                          │
-└─────────────────────────────────────────────────────────┘
-                          ↓
-                   Local Filesystem
-              /var/glasstape/policies/
+```mermaid
+graph LR
+    subgraph "MCP Client"
+        UI[User Interface]
+        ClientLLM[Client LLM]
+    end
+    
+    subgraph "MCP Server"
+        Tools[MCP Tools]
+        ICP[ICP Validator]
+        Gen[Cerbos Generator]
+        CLI[Cerbos CLI]
+        RA[RedTeam Analyzer]
+        TL[Template Library]
+    end
+    
+    subgraph "External"
+        Cerbos[Cerbos Binary]
+        LLM[Optional Server LLM]
+    end
+    
+    UI --> ClientLLM
+    ClientLLM --> Tools
+    Tools --> ICP
+    ICP --> Gen
+    Gen --> CLI
+    CLI --> Cerbos
+    Tools --> RA
+    Tools --> TL
+    LLM -.-> Tools
+    
+    style Tools fill:#fff3e0
+    style LLM fill:#ffebee,stroke-dasharray: 5 5
 ```
 
-### Data Flow
+---
 
-**Mode 1: Client-LLM (Default)**
+## Operating Modes
+
+### A. Default (Recommended): Client-LLM mode
+- The MCP client's LLM (Claude/Cursor/Zed/Q) turns the user's natural language into a simple ICP JSON (a thin, stable intermediate)
+- The server validates ICP → generates Cerbos YAML → runs compile & tests → returns bundle
+- **No API keys, no network calls; fully air-gapped if the client runs locally**
+
+### B. Optional: Server-LLM mode
+- If an IDE lacks LLMs, set LLM_PROVIDER + API key on the server
+- The server converts NL → ICP JSON, then does the same deterministic path
+- Trade-off: introduces secrets and network dependency
+
+**Why not depend on Anthropic/OpenAI?** Because customers already have LLMs in their IDEs. We avoid vendor lock-in, reduce secrets/ops, and keep the critical path deterministic and local.
+
+**Notes:**
+- [Cerbos YAML](https://docs.cerbos.dev/cerbos/latest/policies) is the canonical artifact
+- [ICP (Intermediate Canonical Policy)](#simple-icp-format) is just a wire format between IDE and server
+- Users author natural language, not JSON policies
+
+---
+
+## MCP Tools
+
+The Policy Builder implements 5 core [MCP tools](https://modelcontextprotocol.io/docs/concepts/tools) that integrate seamlessly with MCP-compatible IDEs:
+
+### generate_policy — Primary Tool
+**Purpose**: Convert natural language guardrails into validated Cerbos YAML policies
+
+**Parameters**:
+- `nl_requirements` (string, optional) - Plain English description of AI guardrail or security policy
+- `icp` (object, optional) - Structured ICP JSON for automation/workflow integration
+
+**Behavior**:
+- **Primary workflow**: User provides `nl_requirements`, IDE's LLM converts to ICP, then calls with `icp` parameter
+- **Fallback**: If `nl_requirements` provided and server has LLM configured, converts NL → ICP → YAML (with security warning)
+- **Direct**: If `icp` provided, directly generates Cerbos YAML from validated ICP
+- **Guidance**: If neither LLM nor ICP available, provides detailed guidance on client-LLM workflow
+
+**Output**: Formatted markdown with:
+- Generated Cerbos YAML policy (fenced code block)
+- Generated test suite (fenced code block) 
+- Validation results from `cerbos compile` (if CLI available)
+- Test execution results from `cerbos test` (if validation passed)
+- Next steps suggestions
+
+### validate_policy
+**Parameters**: `policy_yaml` (string, required)
+
+**Behavior**: Validates Cerbos YAML syntax using `cerbos compile`
+
+**Output**: Success/failure with errors and warnings
+
+### test_policy
+**Parameters**: 
+- `policy_yaml` (string, required)
+- `test_yaml` (string, required)
+
+**Behavior**: Runs test suite against policy using `cerbos test`
+
+**Output**: Pass/fail counts and detailed test results
+
+### suggest_improvements
+**Parameters**: 
+- `policy_yaml` (string, required) - Cerbos YAML policy to analyze
+
+**Behavior**: Analyzes policy for security issues using SimpleRedTeamAnalyzer with 5 essential checks:
+1. **Default Deny**: Verifies last rule denies all actions ("*") with EFFECT_DENY
+2. **Rate Limiting**: Detects rate limiting patterns (cumulative, count, frequency keywords)
+3. **Sanctions Screening**: Checks for blocklist/sanctions screening logic
+4. **Input Validation**: Identifies input validation patterns (type checks, range validation)
+5. **Role-Based Access**: Verifies role restrictions are implemented
+
+**Output**: Formatted markdown report with:
+- Security score (X/5 checks passed)
+- Individual check results with ✅ pass, ⚠️ warn, or ❌ fail status
+- Specific improvement recommendations for each failed/warned check
+- Overall readiness assessment
+
+### list_templates
+**Parameters**: 
+- `category` (string, optional) - Filter by category: finance, healthcare, ai_safety, data_access, or system
+
+**Behavior**: Returns curated policy templates from [TemplateLibrary](#template-library). Available templates:
+- **Payment Execution** (finance) - AI agent payments with limits and sanctions
+- **PHI Access** (healthcare) - HIPAA-compliant patient record access  
+- **AI Model Invocation** (ai_safety) - Model invocation with prompt filtering
+- **PII Export Control** (data_access) - GDPR-compliant data export controls
+- **Admin Access** (system) - Administrative access with MFA requirements
+
+**Output**: Formatted markdown with:
+- Available categories list
+- For each template: name, ID, category, description, and example natural language requirement
+- Usage instructions for [generate_policy](#generate_policy--primary-tool) tool
+
+---
+
+## Core Components
+
+The Policy Builder is built with lean, deterministic components that ensure reliable policy generation:
+
+### ICP Validator (`icp_validator.py`)
+**Purpose**: Validates Simple ICP JSON structure without requiring any LLM
+**Key validations**:
+- Confirms version/metadata/policy/tests presence
+- Ensures default-deny last rule (actions:["*"], effect:EFFECT_DENY)
+- Requires at least 1 positive & 1 negative test
+- Validates metadata fields (name in snake_case, required fields)
+- Validates rule structure and test case completeness
+- Uses [Pydantic](https://pydantic.dev/) models for type safety
+
+### Cerbos Generator (`cerbos_generator.py`)
+**Purpose**: Converts validated ICP to [Cerbos YAML](https://docs.cerbos.dev/cerbos/latest/policies) format deterministically
+**Key features**:
+- Maps condition strings → [CEL expressions](https://github.com/google/cel-spec) in condition.match.expr
+- Emits proper Cerbos structure: apiVersion, resourcePolicy.version/resource/rules
+- Builds Cerbos test suite from ICP tests with proper input/expected structure
+- Handles role assignments and action mappings
+- Joins multiple conditions with AND logic
+
+### Cerbos CLI Wrapper (`cerbos_cli.py`)
+**Purpose**: Interface with [Cerbos CLI](https://docs.cerbos.dev/cerbos/latest/cli) for validation and testing
+**Key operations**:
+- `check_installation()`: Verifies Cerbos CLI availability
+- `compile(policy_yaml)`: Returns ValidationResult with success/errors/warnings
+- `test(policy_yaml, test_yaml)`: Returns TestResult with pass/fail counts and details
+- Handles subprocess execution with proper error handling and timeouts
+
+### Simple Red-Team Analyzer (`redteam_analyzer.py`) {#security-analysis}
+**Purpose**: Static security analysis with 5 essential checks
+**Security checks**:
+1. **Default deny principle** (fails if missing final deny-all rule)
+2. **Rate limiting detection** (warns if no rate limit keywords found)
+3. **Sanctions screening** (warns if no blocklist/sanctions keywords)  
+4. **Input validation** (warns if no validation patterns detected)
+5. **Role-based access** (warns if no role restrictions found)
+**Output**: Formatted findings with pass/warn/fail status and actionable recommendations
+
+### Template Library (`templates.py`) {#template-library}
+**Purpose**: Curated policy templates for quick starts
+**Available templates**:
+- **Payment Execution** (finance): Amount limits, sanctions, rate limiting
+- **PHI Access** (healthcare): [HIPAA](https://www.hhs.gov/hipaa) compliance, role verification, audit logging
+- **AI Model Invocation** (ai_safety): Content filtering, rate limits, jailbreak protection
+- **PII Export Control** (data_access): [GDPR](https://gdpr.eu/) compliance, anonymization requirements
+- **Admin Access** (system): MFA requirements, approval workflows, failure limits
+
+### LLM Adapter (`llm_adapter.py`) - Optional 
+**Purpose**: Server-side natural language processing (discouraged in production)
+**Key features**:
+- Optional [Anthropic](https://www.anthropic.com/) adapter for environments without LLM-capable IDEs
+- Warns users that client-LLM mode is preferred for security/compliance
+- Minimal implementation using claude-3-haiku for cost efficiency  
+- Only activated when LLM_PROVIDER environment variable is set
+- Graceful fallback with guidance when not configured
+
+---
+
+## Simple ICP Format
+
+The **Simple ICP** (Intermediate Canonical Policy) serves as a language-agnostic bridge between natural language and Cerbos policies.
+
+### Design Rationale
+
+The **Simple ICP** (Intermediate Canonical Policy) uses a flat structure instead of complex nested expression trees. This makes it:
+- ✅ Easier for LLMs to generate
+- ✅ Simpler to convert to Cerbos YAML
+- ✅ More readable for debugging
+- ✅ Still deterministic and testable
+- ✅ Natural for Python dictionaries
+
+*For complete ICP schema documentation, see [ICP Schema Documentation](#icp-schema-python) below.*
+
+---
+
+## Customer Workflow Examples
+
+### How It Works in Practice
+
+#### Scenario 1: Client-LLM Mode (Recommended - Most IDEs)
+
+**User's perspective:**
+1. User describes requirements in natural language to their IDE's AI assistant (Claude in Claude Desktop, built-in LLM in Cursor/Zed, etc.)
+2. IDE's LLM automatically converts the NL description to ICP JSON format using the provided schema
+3. IDE calls `generate_policy(icp={...})` with the generated ICP
+4. Server validates ICP → generates Cerbos YAML → validates with CLI → returns complete bundle
+5. User receives ready-to-deploy Cerbos YAML + tests + validation results + security analysis
+
+**Example workflow in Claude Desktop:**
 ```
-1. User Input (Natural Language)
-   ↓
-2. MCP Client's LLM (Cursor/Claude/Q)
-   ↓
-3. ICP JSON generated by client
-   ↓
-4. MCP call: generate_policy(icp={...})
-   ↓
-5. Server: ICP Validation
-   ↓
-6. Server: Cerbos YAML Generation
-   ↓
-7. Server: cerbos compile (validation)
-   ↓
-8. Server: Test Generation (from ICP tests)
-   ↓
-9. Server: cerbos test (execution)
-   ↓
-10. Policy Bundle (YAML + Tests)
+User: "Create a payment policy for AI agents. Allow payments up to $50. 
+Block sanctioned entities. Limit to 5 transactions per 5 minutes."
+
+Claude Desktop's LLM:
+1. Converts to ICP JSON with proper structure
+2. Calls generate_policy(icp={version: "1.0.0", metadata: {...}, policy: {...}, tests: [...]})
+
+Server response: 
+✅ Validated Cerbos YAML policy (ready for deployment)
+✅ Complete test suite with positive/negative cases  
+✅ Validation results from cerbos compile
+✅ Security analysis from 5 essential checks
 ```
 
-**Mode 2: Server-LLM (Optional)**
-```
-1. User Input (Natural Language)
-   ↓
-2. MCP call: generate_policy(nl_requirements="...")
-   ↓
-3. Server: LLM Adapter (if configured)
-   ↓
-4. Server: ICP Generation
-   ↓
-5. Server: ICP Validation
-   ↓
-6. Server: Cerbos YAML Generation
-   ↓
-7-10. Same as Mode 1
-```
+#### Scenario 2: Server-LLM Mode (Fallback - Discouraged)
 
-**ICP Example:**
-```python
-{
-  "version": "1.0.0",
-  "metadata": {
-    "name": "payment_policy",
-    "resource": "payment",
-    "description": "Payment execution policy"
-  },
-  "policy": {
-    "resource": "payment",
-    "version": "1.0.0",
-    "rules": [{
-      "actions": ["execute"],
-      "effect": "EFFECT_ALLOW",
-      "conditions": ["amount <= 50", "!(recipient in sanctioned_entities)"]
-    }]
-  },
-  "tests": [...]
-}
-```
+**User's perspective:**
+1. User provides natural language directly: `generate_policy(nl_requirements="...")`
+2. If server has LLM configured (LLM_PROVIDER + API key env vars), server converts NL → ICP → YAML
+3. User receives ready-to-deploy Cerbos YAML + tests
+4. ⚠️ System warns that client-LLM mode is preferred for security and compliance
 
-**Generated Cerbos YAML:**
-```yaml
-apiVersion: api.cerbos.dev/v1
-resourcePolicy:
-  resource: payment
-  rules:
-    - actions: [execute]
-      effect: EFFECT_ALLOW
-      condition:
-        match:
-          expr: "(amount <= 50) && (!(recipient in sanctioned_entities))"
-```
+**When to use:**
+- Only if your IDE lacks LLM capabilities (rare with modern IDEs)
+- Only if you explicitly configure server-side LLM with environment variables
+- Generally discouraged for production/enterprise use due to security implications
+
+**Security considerations:**
+- Requires API keys stored on server
+- Introduces network dependencies  
+- Less deterministic than client-LLM mode
+- May not meet air-gapped/compliance requirements
+
+#### Scenario 3: Direct ICP Usage (Automation/Advanced)
+
+**User's perspective:**
+1. Automated workflows or advanced users provide ICP JSON directly
+2. Server validates and generates Cerbos YAML immediately
+3. No LLM conversion needed
+
+**When to use:**
+- CI/CD pipelines
+- Automated policy generation from structured data
+- Testing and development workflows
+
+### Key Points from Implementation
+- **End users ONLY write natural language** - they never need to understand ICP JSON structure
+- **ICP is invisible wire format** - automatically handled by IDE's LLM or server conversion
+- **Graceful degradation** - if no server LLM configured, provides detailed guidance for client-LLM mode
+- **Cerbos YAML is canonical output** - ready-to-deploy policy files for production use
+- **Validation is built-in** - policies are automatically validated with Cerbos CLI if available
+- **Security analysis included** - every policy gets red-team analysis with actionable recommendations
 
 ---
 
@@ -368,59 +397,66 @@ The **Simple ICP** (Intermediate Canonical Policy) uses a flat structure instead
 ### ICP Schema (Python)
 
 ```python
-# src/agent_policy_builder/types.py
+# src/glasstape_policy_builder/types/icp.py
 
-from dataclasses import dataclass, field
-from typing import Optional, Literal
+from enum import Enum
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
 
-@dataclass
-class ICPMetadata:
-    """Policy metadata"""
-    name: str
-    description: str
-    resource: str
-    compliance: list[str] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)
 
-@dataclass
-class ICPRule:
-    """Policy rule definition"""
-    actions: list[str]
-    effect: Literal['EFFECT_ALLOW', 'EFFECT_DENY']
-    conditions: list[str]  # Simple string expressions
-    roles: list[str] = field(default_factory=list)
-    description: str = ""
+class EffectType(str, Enum):
+    """Cerbos policy effect types."""
+    ALLOW = "EFFECT_ALLOW"
+    DENY = "EFFECT_DENY"
 
-@dataclass
-class ICPPolicy:
-    """Policy definition"""
-    resource: str
-    version: str
-    rules: list[ICPRule]
 
-@dataclass
-class ICPTestInput:
-    """Test case input"""
-    principal: dict  # {"id": "...", "roles": [...]}
-    resource: dict   # {"id": "...", "attr": {...}}
-    actions: list[str]
+class ICPMetadata(BaseModel):
+    """Policy metadata."""
+    name: str = Field(..., description="Policy name (snake_case)")
+    description: str = Field(..., description="Policy description")
+    resource: str = Field(..., description="Resource type")
+    compliance: Optional[List[str]] = Field(default_factory=list, description="Compliance frameworks")
+    tags: Optional[List[str]] = Field(default_factory=list, description="Policy tags")
 
-@dataclass
-class ICPTest:
-    """Policy test case"""
-    name: str
-    category: Literal['positive', 'negative', 'boundary', 'adversarial']
-    input: ICPTestInput
-    expected: Literal['EFFECT_ALLOW', 'EFFECT_DENY']
-    description: str = ""
 
-@dataclass
-class SimpleICP:
-    """Complete policy specification"""
-    version: str
-    metadata: ICPMetadata
-    policy: ICPPolicy
-    tests: list[ICPTest]
+class ICPRule(BaseModel):
+    """Policy rule definition."""
+    actions: List[str] = Field(..., description="Actions this rule applies to")
+    effect: EffectType = Field(..., description="Allow or deny effect")
+    conditions: List[str] = Field(default_factory=list, description="CEL expressions")
+    roles: Optional[List[str]] = Field(default=None, description="Required roles")
+    description: str = Field(default="", description="Rule description")
+
+
+class ICPPolicy(BaseModel):
+    """Policy definition."""
+    resource: str = Field(..., description="Resource type")
+    version: str = Field(default="1.0.0", description="Policy version")
+    rules: List[ICPRule] = Field(..., description="Policy rules")
+
+
+class ICPTestInput(BaseModel):
+    """Test case input."""
+    principal: Dict[str, Any] = Field(..., description="Principal with id and attributes")
+    resource: Dict[str, Any] = Field(..., description="Resource with id and attributes")
+    actions: List[str] = Field(..., description="Actions to test")
+
+
+class ICPTest(BaseModel):
+    """Policy test case."""
+    name: str = Field(..., description="Test name")
+    category: str = Field(..., description="Test category: positive, negative, boundary, or adversarial")
+    input: ICPTestInput = Field(..., description="Test input")
+    expected: EffectType = Field(..., description="Expected effect")
+    description: str = Field(default="", description="Test description")
+
+
+class SimpleICP(BaseModel):
+    """Simple Intermediate Canonical Policy."""
+    version: str = Field(default="1.0.0", description="ICP format version")
+    metadata: ICPMetadata = Field(..., description="Policy metadata")
+    policy: ICPPolicy = Field(..., description="Policy definition")
+    tests: List[ICPTest] = Field(..., description="Test cases")
 ```
 
 ### Example: Payment Policy ICP
@@ -540,7 +576,7 @@ class SimpleICP:
 
 ### 1. MCP Server Core
 
-**File**: `src/agent_policy_builder/server.py`
+**File**: `src/glasstape_policy_builder/server.py`
 
 ```python
 """
@@ -561,7 +597,7 @@ async def main():
     """Run the MCP server"""
     
     # Create server
-    server = Server("agent-policy-builder")
+    server = Server("glasstape-policy-builder")
     
     # Register all tools
     # No API key required - tools work with ICP JSON input by default
@@ -584,7 +620,7 @@ if __name__ == "__main__":
 
 ### 2. ICP Validator (Core)
 
-**File**: `src/agent_policy_builder/icp_validator.py`
+**File**: `src/glasstape_policy_builder/icp_validator.py`
 
 ```python
 """
@@ -801,7 +837,7 @@ if __name__ == "__main__":
 
 ### 3. LLM Adapter (Optional)
 
-**File**: `src/agent_policy_builder/llm_adapter.py`
+**File**: `src/glasstape_policy_builder/llm_adapter.py`
 
 ```python
 """
@@ -974,822 +1010,28 @@ if __name__ == "__main__":
         print("✗ No LLM adapter configured (this is fine for client-LLM mode)")
 ```
 
----
+## Roadmap (Only What Helps Customers Next)
 
-### 4. Cerbos YAML Generator
+**Q2:** richer analyzer (15+ checks), more templates, CI examples, policy diff
 
-### 4. Cerbos YAML Generator
+**Q3:** multi-engine backends (OPA/Cedar emitters), versioning/rollback, simulation ("what-if")
 
-**File**: `src/agent_policy_builder/cerbos_generator.py`
+**Q4:** marketplace + community templates, IDE snippets, policy assistant
 
-```python
-"""
-Cerbos YAML Generator
+## Rationale Calls (So Customers Don't Wonder)
 
-Converts Simple ICP to Cerbos YAML format.
-"""
+**Why not lock into Anthropic/OpenAI?**  
+Your IDE already has an LLM. Using it reduces ops & risk, avoids lock-in, and keeps the core path local and deterministic.
 
-import yaml
+**Why keep ICP at all?**  
+It's a wire format between the IDE and our server—thin, predictable, LLM-friendly—so we can make YAML generation/validation deterministic. Customers author NL, not JSON.
 
-
-class CerbosGenerator:
-    """Generate Cerbos YAML from Simple ICP"""
-    
-    def generate_policy(self, icp: dict) -> str:
-        """
-        Convert ICP to Cerbos policy YAML
-        
-        Args:
-            icp: Simple ICP dictionary
-            
-        Returns:
-            Cerbos policy YAML string
-        """
-        policy = {
-            'apiVersion': 'api.cerbos.dev/v1',
-            'description': icp['metadata']['description'],
-            'resourcePolicy': {
-                'version': icp['policy']['version'],
-                'resource': icp['policy']['resource'],
-                'rules': [self._transform_rule(rule) for rule in icp['policy']['rules']]
-            }
-        }
-        
-        return yaml.dump(policy, default_flow_style=False, sort_keys=False)
-    
-    def generate_tests(self, icp: dict) -> str:
-        """
-        Convert ICP tests to Cerbos test YAML
-        
-        Args:
-            icp: Simple ICP dictionary
-            
-        Returns:
-            Cerbos test YAML string
-        """
-        test_suite = {
-            'name': f"{icp['metadata']['name']}_test_suite",
-            'description': f"Test suite for {icp['metadata']['name']}",
-            'tests': [self._transform_test(test, icp) for test in icp['tests']]
-        }
-        
-        return yaml.dump(test_suite, default_flow_style=False, sort_keys=False)
-    
-    def _transform_rule(self, rule: dict) -> dict:
-        """Transform ICP rule to Cerbos rule"""
-        cerbos_rule = {
-            'actions': rule['actions'],
-            'effect': rule['effect']
-        }
-        
-        # Add roles if specified
-        if rule.get('roles'):
-            cerbos_rule['roles'] = rule['roles']
-        
-        # Add conditions if specified
-        if rule.get('conditions'):
-            cerbos_rule['condition'] = {
-                'match': {
-                    'expr': self._build_expr(rule['conditions'])
-                }
-            }
-        
-        return cerbos_rule
-    
-    def _transform_test(self, test: dict, icp: dict) -> dict:
-        """Transform ICP test to Cerbos test"""
-        return {
-            'name': test['name'],
-            'input': {
-                'principal': test['input']['principal']['id'],
-                'resource': {
-                    'kind': icp['policy']['resource'],
-                    'id': test['input']['resource']['id'],
-                    'attr': test['input']['resource']['attr']
-                },
-                'actions': test['input']['actions']
-            },
-            'expected': [
-                {
-                    'action': action,
-                    'effect': test['expected']
-                }
-                for action in test['input']['actions']
-            ]
-        }
-    
-    def _build_expr(self, conditions: list[str]) -> str:
-        """Build CEL expression from conditions"""
-        # Join conditions with AND, wrapping each in parentheses
-        return ' && '.join(f'({c})' for c in conditions)
-
-
-# Example usage
-if __name__ == "__main__":
-    generator = CerbosGenerator()
-    
-    sample_icp = {
-        "version": "1.0.0",
-        "metadata": {
-            "name": "payment_policy",
-            "description": "Payment policy"
-        },
-        "policy": {
-            "resource": "payment",
-            "version": "1.0.0",
-            "rules": [{
-                "actions": ["execute"],
-                "effect": "EFFECT_ALLOW",
-                "conditions": ["amount <= 50"]
-            }]
-        },
-        "tests": []
-    }
-    
-    print(generator.generate_policy(sample_icp))
-```
+**Why no YAML↔ICP round-trip in core?**  
+It adds complexity without customer benefit. YAML is the canonical artifact. If needed, a basic converter can live in contrib/ for import/migration cases.
 
 ---
 
-### 5. Cerbos CLI Interface
-
-**File**: `src/agent_policy_builder/cerbos_cli.py`
-
-```python
-"""
-Cerbos CLI Interface
-
-Wrapper for executing Cerbos CLI commands.
-"""
-
-import subprocess
-import tempfile
-import re
-from pathlib import Path
-from dataclasses import dataclass
-
-
-@dataclass
-class ValidationResult:
-    """Result of policy validation"""
-    success: bool
-    errors: list[str]
-    warnings: list[str]
-
-
-@dataclass
-class TestResult:
-    """Result of test execution"""
-    passed: int
-    failed: int
-    total: int
-    details: str
-
-
-class CerbosCLI:
-    """Interface to Cerbos CLI for validation and testing"""
-    
-    def __init__(self, work_dir: str = None):
-        self.work_dir = Path(work_dir or tempfile.gettempdir()) / "glasstape-policies"
-    
-    def check_installation(self) -> bool:
-        """Check if Cerbos CLI is installed"""
-        try:
-            result = subprocess.run(
-                ['cerbos', 'version'],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            return False
-    
-    def compile(self, policy_yaml: str) -> ValidationResult:
-        """
-        Validate policy with cerbos compile
-        
-        Args:
-            policy_yaml: Cerbos policy YAML string
-            
-        Returns:
-            ValidationResult with success status and any errors/warnings
-        """
-        try:
-            # Create working directory
-            self.work_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Write policy to file
-            policy_file = self.work_dir / "policy.yaml"
-            policy_file.write_text(policy_yaml)
-            
-            # Run cerbos compile
-            result = subprocess.run(
-                ['cerbos', 'compile', str(self.work_dir)],
-                capture_output=True,
-                text=True,
-                timeout=30
-            )
-            
-            output = result.stdout + result.stderr
-            
-            # Check for errors
-            if 'error' in output.lower() or result.returncode != 0:
-                return ValidationResult(
-                    success=False,
-                    errors=self._extract_errors(output),
-                    warnings=self._extract_warnings(output)
-                )
-            
-            return ValidationResult(
-                success=True,
-                errors=[],
-                warnings=self._extract_warnings(output)
-            )
-            
-        except subprocess.TimeoutExpired:
-            return ValidationResult(
-                success=False,
-                errors=["Validation timeout - policy compilation took too long"],
-                warnings=[]
-            )
-        except Exception as e:
-            return ValidationResult(
-                success=False,
-                errors=[f"Validation error: {str(e)}"],
-                warnings=[]
-            )
-    
-    def test(self, policy_yaml: str, test_yaml: str) -> TestResult:
-        """
-        Run tests with cerbos test
-        
-        Args:
-            policy_yaml: Cerbos policy YAML string
-            test_yaml: Cerbos test suite YAML string
-            
-        Returns:
-            TestResult with pass/fail counts and details
-        """
-        try:
-            # Setup files
-            self.work_dir.mkdir(parents=True, exist_ok=True)
-            (self.work_dir / "policy.yaml").write_text(policy_yaml)
-            (self.work_dir / "test.yaml").write_text(test_yaml)
-            
-            # Run cerbos test
-            result = subprocess.run(
-                ['cerbos', 'test', str(self.work_dir)],
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            
-            return self._parse_test_output(result.stdout)
-            
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("Test execution timeout")
-        except Exception as e:
-            raise RuntimeError(f"Test execution failed: {str(e)}")
-    
-    def _extract_errors(self, output: str) -> list[str]:
-        """Extract error messages from Cerbos output"""
-        errors = []
-        for line in output.split('\n'):
-            if 'error' in line.lower():
-                errors.append(line.strip())
-        return errors
-    
-    def _extract_warnings(self, output: str) -> list[str]:
-        """Extract warning messages from Cerbos output"""
-        warnings = []
-        for line in output.split('\n'):
-            if 'warn' in line.lower():
-                warnings.append(line.strip())
-        return warnings
-    
-    def _parse_test_output(self, output: str) -> TestResult:
-        """Parse Cerbos test output"""
-        # Parse "X passed, Y failed" format
-        passed_match = re.search(r'(\d+) passed', output)
-        failed_match = re.search(r'(\d+) failed', output)
-        
-        passed = int(passed_match.group(1)) if passed_match else 0
-        failed = int(failed_match.group(1)) if failed_match else 0
-        
-        return TestResult(
-            passed=passed,
-            failed=failed,
-            total=passed + failed,
-            details=output
-        )
-
-
-# Example usage
-if __name__ == "__main__":
-    cli = CerbosCLI()
-    
-    if cli.check_installation():
-        print("✓ Cerbos CLI is installed")
-    else:
-        print("✗ Cerbos CLI not found")
-```
-
----
-
-### 6. Simple Red-Team Analyzer
-
-**File**: `src/agent_policy_builder/redteam_analyzer.py`
-
-```python
-"""
-Simple Red-Team Analyzer
-
-Performs 5 essential security checks on policies.
-"""
-
-from dataclasses import dataclass
-from typing import Literal
-
-
-@dataclass
-class RedTeamFinding:
-    """Security analysis finding"""
-    check: str
-    status: Literal['pass', 'warn', 'fail']
-    message: str
-
-
-class SimpleRedTeamAnalyzer:
-    """Analyze policies for common security issues"""
-    
-    def analyze(self, policy_yaml: str, icp: dict = None) -> list[RedTeamFinding]:
-        """
-        Run 5 essential security checks
-        
-        Args:
-            policy_yaml: Cerbos policy YAML string
-            icp: Optional Simple ICP dictionary for deeper analysis
-            
-        Returns:
-            List of security findings
-        """
-        findings = []
-        
-        # Check 1: Default-deny principle
-        findings.append(self._check_default_deny(icp or {}, policy_yaml))
-        
-        # Check 2: Rate limiting
-        findings.append(self._check_rate_limiting(policy_yaml))
-        
-        # Check 3: Sanctions screening
-        findings.append(self._check_sanctions_screening(policy_yaml))
-        
-        # Check 4: Input validation
-        findings.append(self._check_input_validation(policy_yaml))
-        
-        # Check 5: Role-based access
-        findings.append(self._check_role_based_access(icp or {}, policy_yaml))
-        
-        return findings
-    
-    def format_findings(self, findings: list[RedTeamFinding]) -> str:
-        """Format findings as readable text"""
-        output = "## Security Analysis Results\n\n"
-        
-        passed = sum(1 for f in findings if f.status == 'pass')
-        warned = sum(1 for f in findings if f.status == 'warn')
-        failed = sum(1 for f in findings if f.status == 'fail')
-        
-        output += f"**Score**: {passed}/5 checks passed\n\n"
-        
-        for finding in findings:
-            output += f"### {finding.check}\n"
-            output += f"{finding.message}\n\n"
-        
-        if failed > 0:
-            output += '⚠️ **Action Required**: Address failed checks before deployment\n'
-        elif warned > 0:
-            output += '💡 **Recommendations**: Consider addressing warnings to improve security\n'
-        else:
-            output += '✅ **Ready for Deployment**: All security checks passed\n'
-        
-        return output
-    
-    def _check_default_deny(self, icp: dict, policy_yaml: str) -> RedTeamFinding:
-        """Check for default-deny principle"""
-        if icp and 'policy' in icp and 'rules' in icp['policy']:
-            rules = icp['policy']['rules']
-            if rules:
-                last_rule = rules[-1]
-                if (last_rule.get('effect') == 'EFFECT_DENY' and 
-                    '*' in last_rule.get('actions', [])):
-                    return RedTeamFinding(
-                        check='Default Deny',
-                        status='pass',
-                        message='✓ Policy implements default-deny principle'
-                    )
-        
-        return RedTeamFinding(
-            check='Default Deny',
-            status='fail',
-            message='✗ Missing default-deny rule. Add a final rule with effect: EFFECT_DENY and actions: ["*"]'
-        )
-    
-    def _check_rate_limiting(self, policy_yaml: str) -> RedTeamFinding:
-        """Check for rate limiting controls"""
-        rate_keywords = ['cumulative', 'count', 'rate', 'frequency', 'limit']
-        has_rate_limit = any(keyword in policy_yaml.lower() for keyword in rate_keywords)
-        
-        if has_rate_limit:
-            return RedTeamFinding(
-                check='Rate Limiting',
-                status='pass',
-                message='✓ Rate limiting controls detected'
-            )
-        
-        return RedTeamFinding(
-            check='Rate Limiting',
-            status='warn',
-            message='⚠ No rate limiting detected. Consider adding cumulative amount or transaction frequency limits'
-        )
-    
-    def _check_sanctions_screening(self, policy_yaml: str) -> RedTeamFinding:
-        """Check for sanctions/blocklist screening"""
-        sanction_keywords = ['sanction', 'blocked', 'blocklist', 'blacklist']
-        has_sanctions = any(keyword in policy_yaml.lower() for keyword in sanction_keywords)
-        
-        if has_sanctions:
-            return RedTeamFinding(
-                check='Sanctions Screening',
-                status='pass',
-                message='✓ Sanctions/blocklist screening detected'
-            )
-        
-        return RedTeamFinding(
-            check='Sanctions Screening',
-            status='warn',
-            message='⚠ No sanctions screening detected. Consider adding entity screening against blocked lists'
-        )
-    
-    def _check_input_validation(self, policy_yaml: str) -> RedTeamFinding:
-        """Check for input validation"""
-        validation_patterns = ['> 0', '>= 0', '!= null', 'typeof']
-        has_validation = any(pattern in policy_yaml for pattern in validation_patterns)
-        
-        if has_validation:
-            return RedTeamFinding(
-                check='Input Validation',
-                status='pass',
-                message='✓ Input validation checks detected'
-            )
-        
-        return RedTeamFinding(
-            check='Input Validation',
-            status='warn',
-            message='⚠ Limited input validation. Consider adding type and range checks for all inputs'
-        )
-    
-    def _check_role_based_access(self, icp: dict, policy_yaml: str) -> RedTeamFinding:
-        """Check for role-based access control"""
-        has_roles = False
-        
-        if icp and 'policy' in icp and 'rules' in icp['policy']:
-            rules = icp['policy']['rules']
-            has_roles = any(rule.get('roles') for rule in rules)
-        
-        if not has_roles:
-            has_roles = 'roles:' in policy_yaml
-        
-        if has_roles:
-            return RedTeamFinding(
-                check='Role-Based Access',
-                status='pass',
-                message='✓ Role-based access control implemented'
-            )
-        
-        return RedTeamFinding(
-            check='Role-Based Access',
-            status='warn',
-            message='⚠ No role restrictions found. Consider adding role-based access control'
-        )
-
-
-# Example usage
-if __name__ == "__main__":
-    analyzer = SimpleRedTeamAnalyzer()
-    
-    sample_yaml = """
-apiVersion: api.cerbos.dev/v1
-resourcePolicy:
-  resource: payment
-  rules:
-    - actions: [execute]
-      effect: EFFECT_ALLOW
-      condition:
-        match:
-          expr: "amount <= 50"
-"""
-    
-    findings = analyzer.analyze(sample_yaml)
-    print(analyzer.format_findings(findings))
-```
-
----
-
-### 7. Template Library
-
-**File**: `src/agent_policy_builder/templates.py`
-
-```python
-"""
-Policy Template Library
-
-Pre-built templates for common policy scenarios.
-"""
-
-from dataclasses import dataclass
-from typing import Literal
-
-
-@dataclass
-class PolicyTemplate:
-    """Policy template definition"""
-    id: str
-    name: str
-    category: Literal['finance', 'healthcare', 'ai_safety', 'data_access', 'system']
-    description: str
-    example: str
-
-
-POLICY_TEMPLATES = [
-    PolicyTemplate(
-        id='payment_execution',
-        name='Payment Execution Policy',
-        category='finance',
-        description='AI agent payment policy with amount limits, sanctions screening, and rate limiting',
-        example="""Allow AI agents to execute payments up to $50. Block sanctioned entities. 
-Limit cumulative hourly amount to $50. Maximum 5 transactions per 5 minutes."""
-    ),
-    PolicyTemplate(
-        id='phi_access',
-        name='PHI Access Policy',
-        category='healthcare',
-        description='HIPAA-compliant policy for accessing protected health information',
-        example="""Allow healthcare providers to read patient records. Require role verification. 
-Log all access. Block access to records of patients not under their care."""
-    ),
-    PolicyTemplate(
-        id='model_invocation',
-        name='AI Model Invocation Policy',
-        category='ai_safety',
-        description='Policy for controlling AI model invocations with prompt filtering',
-        example="""Allow AI agents to invoke models for approved use cases. Block jailbreak attempts. 
-Limit to 100 requests per hour. Require content filtering."""
-    ),
-    PolicyTemplate(
-        id='pii_export',
-        name='PII Export Control Policy',
-        category='data_access',
-        description='Policy for controlling export of personally identifiable information',
-        example="""Allow data analysts to export anonymized data. Block export of PII fields. 
-Require approval for exports over 10,000 records. Log all export operations."""
-    ),
-    PolicyTemplate(
-        id='admin_access',
-        name='Admin Access Policy',
-        category='system',
-        description='Policy for administrative system access with MFA requirements',
-        example="""Allow system administrators to modify configurations. Require MFA verification. 
-Block after 3 failed attempts. Require approval for production changes."""
-    ),
-]
-
-
-class TemplateLibrary:
-    """Manage policy templates"""
-    
-    def list_templates(self, category: str = None) -> list[PolicyTemplate]:
-        """
-        List available templates
-        
-        Args:
-            category: Optional category filter
-            
-        Returns:
-            List of matching templates
-        """
-        if category:
-            return [t for t in POLICY_TEMPLATES if t.category == category]
-        return POLICY_TEMPLATES
-    
-    def get_template(self, template_id: str) -> PolicyTemplate | None:
-        """Get a specific template by ID"""
-        for template in POLICY_TEMPLATES:
-            if template.id == template_id:
-                return template
-        return None
-    
-    def get_categories(self) -> list[str]:
-        """Get list of all categories"""
-        return list(set(t.category for t in POLICY_TEMPLATES))
-    
-    def format_templates(self, templates: list[PolicyTemplate]) -> str:
-        """Format templates as readable text"""
-        output = "# Policy Templates\n\n"
-        output += f"**Categories**: {', '.join(self.get_categories())}\n\n"
-        
-        for template in templates:
-            output += f"## {template.name}\n"
-            output += f"**ID**: `{template.id}`\n"
-            output += f"**Category**: {template.category}\n"
-            output += f"**Description**: {template.description}\n\n"
-            output += "**Example requirement**:\n"
-            output += f"```\n{template.example}\n```\n\n"
-        
-        output += "\n---\n\n"
-        output += "Use `generate_policy` with any of these example requirements to create a policy.\n"
-        
-        return output
-
-
-# Example usage
-if __name__ == "__main__":
-    library = TemplateLibrary()
-    
-    print(f"Available categories: {library.get_categories()}")
-    print(f"\nTotal templates: {len(library.list_templates())}")
-    
-    finance_templates = library.list_templates('finance')
-    print(f"Finance templates: {len(finance_templates)}")
-```
-
----
-
-## Client-Side Prompt for IDEs
-
-For client-LLM mode to work effectively, the MCP client's LLM needs clear instructions on generating valid ICP JSON. Here's the recommended prompt:
-
-**File**: `docs/client_prompt.md`
-
-```markdown
-# Client-Side ICP Generation Prompt
-
-Use this prompt in your IDE (Cursor/Claude/Q) to generate valid ICP JSON:
-
----
-
-You are a policy normalizer. Convert the user's natural language security requirements
-into ICP JSON for Cerbos policy generation. Output ONLY valid JSON matching this schema:
-
-```json
-{
-  "version": "1.0.0",
-  "metadata": {
-    "name": "snake_case_name",
-    "description": "Clear description of what the policy does",
-    "resource": "resource_kind",
-    "compliance": ["SOX", "HIPAA", "PCI-DSS", "GDPR", "EU_AI_ACT"],
-    "tags": ["ai", "guardrail", "finance"]
-  },
-  "policy": {
-    "resource": "resource_kind",
-    "version": "1.0.0",
-    "rules": [
-      {
-        "actions": ["execute", "read", "write"],
-        "effect": "EFFECT_ALLOW",
-        "roles": ["agent", "service", "admin"],
-        "conditions": [
-          "request.resource.attr.amount > 0",
-          "request.resource.attr.amount <= 50",
-          "!(request.resource.attr.recipient in request.resource.attr.sanctioned_entities)",
-          "(request.resource.attr.cumulative_amount_last_hour + request.resource.attr.amount) <= 50",
-          "request.resource.attr.agent_txn_count_5m < 5"
-        ],
-        "description": "Allow small payments with rate limiting and sanctions check"
-      },
-      {
-        "actions": ["*"],
-        "effect": "EFFECT_DENY",
-        "conditions": [],
-        "description": "Default deny all other actions"
-      }
-    ]
-  },
-  "tests": [
-    {
-      "name": "valid_payment_allowed",
-      "description": "Valid payment under all limits should be allowed",
-      "category": "positive",
-      "input": {
-        "principal": {
-          "id": "agent-123",
-          "roles": ["ai_agent"]
-        },
-        "resource": {
-          "id": "payment-456",
-          "attr": {
-            "amount": 30,
-            "recipient": "vendor@example.com",
-            "sanctioned_entities": ["evil@bad.com"],
-            "cumulative_amount_last_hour": 10,
-            "agent_txn_count_5m": 2
-          }
-        },
-        "actions": ["execute"]
-      },
-      "expected": "EFFECT_ALLOW"
-    },
-    {
-      "name": "excessive_amount_denied",
-      "description": "Payment exceeding limit should be denied",
-      "category": "negative",
-      "input": {
-        "principal": {
-          "id": "agent-123",
-          "roles": ["ai_agent"]
-        },
-        "resource": {
-          "id": "payment-789",
-          "attr": {
-            "amount": 100,
-            "recipient": "vendor@example.com",
-            "sanctioned_entities": [],
-            "cumulative_amount_last_hour": 0,
-            "agent_txn_count_5m": 0
-          }
-        },
-        "actions": ["execute"]
-      },
-      "expected": "EFFECT_DENY"
-    }
-  ]
-}
-```
-
-**Key Requirements:**
-
-1. **Always include a default deny rule** as the last rule:
-   ```json
-   {
-     "actions": ["*"],
-     "effect": "EFFECT_DENY",
-     "conditions": [],
-     "description": "Default deny"
-   }
-   ```
-
-2. **Generate at least 2 tests**: one positive, one negative
-
-3. **Use simple string conditions**: not nested expression trees
-   - Good: `"amount <= 50"`
-   - Good: `"!(recipient in sanctioned_entities)"`
-   - Bad: Complex nested objects
-
-4. **Use proper CEL syntax** in conditions:
-   - Resource attributes: `request.resource.attr.field_name`
-   - Principal attributes: `request.principal.attr.field_name`
-   - Logical operators: `&&`, `||`, `!`
-   - Comparisons: `>`, `<`, `>=`, `<=`, `==`, `!=`
-   - Membership: `in`, `contains`
-
-5. **Snake_case for names**: `payment_policy`, not `PaymentPolicy`
-
-6. **Comprehensive test inputs**: Include all attributes needed by conditions
-
----
-
-**Usage in IDE:**
-
-After generating ICP JSON, call the MCP tool:
-
-```
-generate_policy(icp={...the JSON above...})
-```
-
-The server will validate the ICP, generate Cerbos YAML, run tests, and return the complete policy bundle.
-```
-
-### Example Usage
-
-**In Cursor/Claude Desktop:**
-
-```
-User: Create a payment policy for AI agents. Allow payments up to $50.
-      Block sanctioned entities. Limit to 5 transactions per 5 minutes.
-
-IDE LLM: [Uses client prompt to generate ICP JSON]
-
-IDE: [Calls] generate_policy(icp={
-  "version": "1.0.0",
-  "metadata": {...},
-  "policy": {...},
-  "tests": [...]
-})
-
-Server: [Returns validated Cerbos YAML + test results]
-```
+**Status:** MVP spec final • Aligned with README • Customer-first (NL→YAML) • No crypto-signing • ICP kept minimal and optional.
 
 ---
 
@@ -1797,7 +1039,7 @@ Server: [Returns validated Cerbos YAML + test results]
 
 ### Tool Registration
 
-**File**: `src/agent_policy_builder/tools.py`
+**File**: `src/glasstape_policy_builder/tools/__init__.py`
 
 ```python
 """
@@ -2154,7 +1396,7 @@ async def handle_list_templates(
 
 ### Installation Check Script
 
-**File**: `src/agent_policy_builder/setup.py`
+**File**: `src/glasstape_policy_builder/setup.py`
 
 ```python
 """
@@ -2302,8 +1544,7 @@ Unit tests for policy generator
 """
 
 import pytest
-from agent_policy_builder.intent_parser import IntentParser
-from agent_policy_builder.cerbos_generator import CerbosGenerator
+from glasstape_policy_builder.cerbos_generator import CerbosGenerator
 
 
 def test_payment_policy_generation():
@@ -2348,9 +1589,10 @@ def test_payment_policy_generation():
 
 def test_icp_validation():
     """Test ICP validation"""
-    from agent_policy_builder.intent_parser import IntentParser
+    # ICP validation testing
+    from glasstape_policy_builder.icp_validator import ICPValidator
     
-    parser = IntentParser("test-key")
+    validator = ICPValidator()
     
     # Valid ICP
     valid_icp = {
@@ -2401,13 +1643,13 @@ curl -L https://github.com/cerbos/cerbos/releases/latest/download/cerbos_Linux_x
 cerbos version
 
 # 4. Install the MCP server
-pip install agent-policy-builder-mcp
+pip install glasstape-policy-builder-mcp
 
 # 5. Verify installation
-agent-policy-builder-mcp --version
+glasstape-policy-builder-mcp --version
 
 # 6. Run setup check
-python -m agent_policy_builder.setup
+python -m glasstape_policy_builder.setup
 ```
 
 ### Configuration
@@ -2418,8 +1660,8 @@ python -m agent_policy_builder.setup
 ```json
 {
   "mcpServers": {
-    "agent-policy-builder": {
-      "command": "agent-policy-builder-mcp"
+    "glasstape-policy-builder": {
+      "command": "glasstape-policy-builder-mcp"
     }
   }
 }
@@ -2430,8 +1672,8 @@ python -m agent_policy_builder.setup
 ```json
 {
   "mcpServers": {
-    "agent-policy-builder": {
-      "command": "agent-policy-builder-mcp",
+    "glasstape-policy-builder": {
+      "command": "glasstape-policy-builder-mcp",
       "env": {
         "LLM_PROVIDER": "anthropic",
         "ANTHROPIC_API_KEY": "sk-ant-..."
@@ -2448,8 +1690,8 @@ python -m agent_policy_builder.setup
 
 ```bash
 # Clone repository
-git clone https://github.com/glasstape/agent-policy-builder-mcp.git
-cd agent-policy-builder-mcp
+git clone https://github.com/glasstape/glasstape-policy-builder-mcp.git
+cd glasstape-policy-builder-mcp
 
 # Create virtual environment
 python3 -m venv venv
@@ -2462,7 +1704,7 @@ pip install -e ".[dev]"
 pytest
 
 # Run setup check
-python -m agent_policy_builder.setup
+python -m glasstape_policy_builder.setup
 ```
 
 ### Directory Structure
@@ -2573,48 +1815,65 @@ LOG_LEVEL=info                                # Default: info
 
 ---
 
-## Appendix A: Project Structure
+## Appendices
+
+### Appendix A: Actual Project Structure
 
 ```
-agent-policy-builder-mcp/
+glasstape-policy-builder-mcp/
 ├── src/
-│   └── agent_policy_builder/
+│   └── glasstape_policy_builder/
 │       ├── __init__.py
-│       ├── server.py              # MCP server entry point
-│       ├── tools.py               # Tool registration & handlers
-│       ├── types.py               # Data classes & types
-│       ├── icp_validator.py       # ICP JSON validation (core)
-│       ├── llm_adapter.py         # Optional LLM providers
-│       ├── cerbos_generator.py    # ICP → Cerbos YAML
-│       ├── cerbos_cli.py          # Cerbos CLI interface
-│       ├── redteam_analyzer.py    # Security analysis
-│       ├── templates.py           # Template library
-│       └── setup.py               # Installation checks
+│       ├── server.py              # MCP server entry point with environment validation
+│       ├── icp_validator.py       # ICP JSON validation (core component)
+│       ├── llm_adapter.py         # Optional LLM providers (Anthropic with warnings)
+│       ├── cerbos_generator.py    # ICP → Cerbos YAML conversion
+│       ├── cerbos_cli.py          # Cerbos CLI wrapper with subprocess handling
+│       ├── redteam_analyzer.py    # 5-check security analysis
+│       ├── templates.py           # 5 curated policy templates
+│       ├── setup.py               # Installation and dependency checks
+│       ├── tools/                 # MCP tool implementations
+│       │   ├── __init__.py        # Tool registration and handlers
+│       │   ├── generate_policy.py # Primary tool with client/server LLM modes
+│       │   ├── validate_policy.py # Cerbos compile wrapper
+│       │   ├── test_policy.py     # Cerbos test execution
+│       │   ├── suggest_improvements.py # Security analysis tool
+│       │   └── list_templates.py  # Template browsing
+│       └── types/                 # Pydantic type definitions
+│           ├── __init__.py
+│           ├── icp.py             # Complete SimpleICP schema with validation
+│           └── results.py         # ValidationResult and TestResult types
 ├── tests/
-│   ├── __init__.py
-│   ├── test_validator.py
-│   ├── test_generator.py
-│   ├── test_cli.py
-│   └── fixtures/
-│       └── sample_policies/
+│   ├── test_components.py         # Component unit tests
+│   └── test_tools.py              # MCP tool integration tests
+├── examples/                      # Complete policy examples with output
+│   ├── README.md                  # Examples documentation
+│   ├── payment_policy.md          # Payment policy with natural language
+│   ├── payment_policy_output.yaml # Generated Cerbos YAML
+│   ├── payment_policy_tests.yaml  # Generated test suite
+│   ├── phi_access_policy.md       # HIPAA-compliant PHI access
+│   ├── ai_model_invocation_policy.md # AI safety policy
+│   ├── pii_export_policy.md       # GDPR data export policy
+│   └── admin_access_policy.md     # System admin access policy
 ├── docs/
-│   ├── client_prompt.md           # Prompt for client LLMs
-│   ├── templates/
-│   │   ├── payment_execution.md
-│   │   ├── phi_access.md
-│   │   ├── model_invocation.md
-│   │   ├── pii_export.md
-│   │   └── admin_access.md
-│   └── examples/
-├── pyproject.toml
-├── README.md
-├── LICENSE
-└── .gitignore
+│   └── technical-design.md        # This document
+├── pyproject.toml                 # Package configuration with optional dependencies
+├── README.md                      # User-facing documentation
+├── LICENSE                        # Apache 2.0 license
+├── CODE_OF_CONDUCT.md            # Community guidelines
+├── CONTRIBUTING.md               # Contribution guidelines
+├── SECURITY.md                   # Security policy
+└── __pycache__/                  # Python cache files (ignored in git)
 ```
 
----
+**Key implementation notes:**
+- All core components are implemented and functional
+- Server validates environment on startup (Cerbos CLI, LLM config)
+- Tools handle error cases gracefully with user-friendly messages
+- Examples include both markdown descriptions and generated YAML output
+- Type safety ensured through Pydantic models throughout
 
-## Appendix B: Package Configuration
+### Appendix B: Package Configuration
 
 **File**: `pyproject.toml`
 
@@ -2624,7 +1883,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent-policy-builder-mcp"
+name = "glasstape-policy-builder-mcp"
 version = "1.0.0"
 description = "Transform natural language into Cerbos policies via MCP"
 readme = "README.md"
@@ -2644,9 +1903,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-# Core dependencies - no LLM required
 dependencies = [
     "mcp>=0.9.0",
+    "pydantic>=2.0.0",
     "pyyaml>=6.0",
 ]
 
@@ -2673,27 +1932,21 @@ dev = [
 ]
 
 [project.scripts]
-agent-policy-builder-mcp = "agent_policy_builder.server:main"
+glasstape-policy-builder-mcp = "glasstape_policy_builder.server:main"
 
 [project.urls]
 Homepage = "https://glasstape.ai"
 Documentation = "https://docs.glasstape.com/agent-policy-builder"
-Repository = "https://github.com/glasstape/agent-policy-builder-mcp"
-Issues = "https://github.com/glasstape/agent-policy-builder-mcp/issues"
+Repository = "https://github.com/glasstape/glasstape-policy-builder-mcp"
+Issues = "https://github.com/glasstape/glasstape-policy-builder-mcp/issues"
 
 [tool.black]
-line-length = 100
+line-length = 88
 target-version = ['py310']
 
 [tool.ruff]
-line-length = 100
+line-length = 88
 target-version = "py310"
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -2702,25 +1955,46 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 ```
 
-**Installation Options:**
+**Actual Installation Options (from pyproject.toml):**
 
 ```bash
 # Core only (client-LLM mode - recommended)
-pip install agent-policy-builder-mcp
+pip install glasstape-policy-builder-mcp
 
 # With Anthropic support (server-LLM mode)
-pip install agent-policy-builder-mcp[anthropic]
+pip install glasstape-policy-builder-mcp[anthropic]
+
+# With Bedrock support (future)
+pip install glasstape-policy-builder-mcp[bedrock]
+
+# With OpenAI support (future) 
+pip install glasstape-policy-builder-mcp[openai]
 
 # With all LLM providers
-pip install agent-policy-builder-mcp[llm]
+pip install glasstape-policy-builder-mcp[llm]
 
 # Development setup
-pip install agent-policy-builder-mcp[dev]
+pip install glasstape-policy-builder-mcp[dev]
 ```
 
----
+**Core dependencies (always installed):**
+- `mcp>=0.9.0` - Model Context Protocol framework
+- `pydantic>=2.0.0` - Data validation and type hints
+- `pyyaml>=6.0` - YAML parsing for Cerbos policies
 
-## Appendix C: Error Handling
+**Optional LLM dependencies:**
+- `anthropic>=0.18.0` - For server-side Anthropic Claude integration
+- `boto3>=1.28.0` - For future AWS Bedrock support  
+- `openai>=1.0.0` - For future OpenAI integration
+
+**Development dependencies:**
+- `pytest>=7.0` - Testing framework
+- `pytest-asyncio>=0.21` - Async testing support
+- `black>=23.0` - Code formatting
+- `ruff>=0.1.0` - Linting and code analysis
+- `mypy>=1.0` - Static type checking
+
+### Appendix C: Error Handling
 
 ### Error Categories
 
@@ -2741,9 +2015,7 @@ TextContent(
 )
 ```
 
----
-
-## Appendix D: Performance Targets
+### Appendix D: Performance Targets
 
 ### MVP Targets
 
@@ -2756,9 +2028,7 @@ TextContent(
 | Memory usage | <300MB | Server process |
 | Concurrent requests | 1 | Sequential processing |
 
----
-
-## Appendix E: Quick Start Examples
+### Appendix E: Quick Start Examples
 
 ### Example 1: Payment Policy
 
@@ -2819,25 +2089,23 @@ Log all access attempts.
 # - Role-based access controls
 ```
 
----
-
-## Appendix F: Development Workflow
+### Appendix F: Development Workflow
 
 ### Local Development
 
 ```bash
 # 1. Setup
 git clone <repo>
-cd agent-policy-builder-mcp
+cd glasstape-policy-builder-mcp
 python3 -m venv venv
 source venv/bin/activate
 pip install -e ".[dev]"
 
 # 2. Make changes
-# Edit files in src/agent_policy_builder/
+# Edit files in src/glasstape_policy_builder/
 
-# 3. Run tests
-pytest -v
+# 3. Run tests  
+pytest
 
 # 4. Format code
 black src/ tests/
@@ -2848,7 +2116,7 @@ mypy src/
 
 # 6. Test manually
 export ANTHROPIC_API_KEY="sk-ant-..."
-python -m agent_policy_builder.server
+python -m glasstape_policy_builder.server
 ```
 
 ### Building Distribution
@@ -2866,11 +2134,44 @@ twine upload dist/*
 
 ---
 
-**Document Version**: 1.0 MVP (Python)  
-**Last Updated**: October 26, 2025  
+---
+
+## Summary: Implementation Alignment with Customer Vision
+
+This technical design document has been updated to accurately reflect the implemented codebase and perfectly aligns with the customer-focused vision:
+
+### ✅ Customer Vision Achieved
+- **"Write guardrails in natural language, get enterprise-grade Cerbos policies instantly"** - ✅ Implemented
+- **Client-LLM mode by default** - ✅ No mandatory API keys or server dependencies  
+- **Air-gapped operation** - ✅ Fully functional without network calls
+- **Validated policies** - ✅ Automatic Cerbos CLI validation and testing
+- **Security analysis** - ✅ 5 essential red-team checks with actionable feedback
+- **Ready-to-deploy output** - ✅ Production-ready Cerbos YAML + test suites
+
+### ✅ Technical Implementation Complete
+- **5 MCP tools** fully implemented with proper error handling
+- **Simple ICP format** with Pydantic validation and type safety
+- **Template library** with 5 real-world policy categories
+- **Graceful degradation** when Cerbos CLI or LLM adapters unavailable
+- **Security-first design** with warnings for server-side LLM usage
+- **Comprehensive examples** with generated output demonstrating real usage
+
+### ✅ Enterprise Ready
+- **Zero vendor lock-in** - works with any MCP-compatible IDE
+- **Compliance-focused** - templates for HIPAA, SOX, GDPR, PCI-DSS
+- **Production-tested** - proper subprocess handling, error boundaries, validation
+- **Developer-friendly** - clear error messages, comprehensive documentation
+- **Extensible** - clean interfaces for future multi-engine support (OPA, Cedar)
+
+The implementation delivers exactly what customers need: a simple way to turn natural language security requirements into production-ready policies, while maintaining enterprise security standards and avoiding vendor dependencies.
+
+---
+
+**Document Version**: 1.1 MVP (Implementation-Aligned)  
+**Last Updated**: October 28, 2025  
 **Language**: Python 3.10+  
-**Status**: Ready for Implementation  
-**Next Review**: After MVP Launch
+**Status**: ✅ Implemented and Aligned with Codebase  
+**Next Review**: Post-MVP Feedback Integration
 
 ---
 

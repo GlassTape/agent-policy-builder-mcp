@@ -13,6 +13,13 @@ class CerbosCLI:
     """Interface to Cerbos CLI for validation and testing"""
     
     def __init__(self, work_dir: Optional[str] = None):
+        # Sanitize work directory to prevent path traversal
+        if work_dir:
+            work_dir = Path(work_dir).resolve()  # Resolve to absolute path
+            # Ensure it's within safe boundaries
+            if not str(work_dir).startswith(('/tmp', tempfile.gettempdir())):
+                raise ValueError("Work directory must be within /tmp or system temp directory")
+        
         self.work_dir = Path(work_dir or tempfile.gettempdir()) / "glasstape-policies"
         self.work_dir.mkdir(parents=True, exist_ok=True)
     
@@ -23,10 +30,11 @@ class CerbosCLI:
                 ['cerbos', 'version'],
                 capture_output=True,
                 text=True,
-                timeout=5
+                timeout=5,
+                shell=False  # Prevent shell injection
             )
             return result.returncode == 0
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):
             return False
     
     def compile(self, policy_yaml: str) -> ValidationResult:
@@ -49,7 +57,8 @@ class CerbosCLI:
                 ['cerbos', 'compile', str(self.work_dir)],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                shell=False  # Prevent shell injection
             )
             
             output = result.stdout + result.stderr
@@ -108,7 +117,8 @@ class CerbosCLI:
                 ['cerbos', 'test', str(self.work_dir)],
                 capture_output=True,
                 text=True,
-                timeout=60
+                timeout=60,
+                shell=False  # Prevent shell injection
             )
             
             return self._parse_test_output(result.stdout)
