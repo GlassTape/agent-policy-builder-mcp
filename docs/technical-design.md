@@ -54,26 +54,18 @@ AI agents require **policy-as-code** that survives model changes and framework m
 - 📋 **Compliance Templates**: Pre-built templates for HIPAA, SOX, GDPR, PCI-DSS
 - 🚀 **Developer Friendly**: MCP integration works in Claude Desktop, Cursor, Zed, Q
 
-### Policy Builder Architecture
-```mermaid
-flowchart TD
-    A["Developer: Natural Language Policy"] --> B["MCP Client IDE"]
-    B --> C["generate_policy Tool Call"]
-    C --> D["Policy Builder MCP Server"]
-    D --> E{"Input Type?"}
-    E -->|"nl_requirements"| F["Optional Server LLM"]
-    E -->|"icp"| G["ICP Validator"]
-    F --> G
-    G --> H["Cerbos Generator"]
-    H --> I["Cerbos CLI"]
-    I --> J["Security Analyzer"]
-    J --> K["Formatted Response"]
-    
-    style A fill:#e3f2fd
-    style D fill:#fff3e0
-    style K fill:#e8f5e8
-    style F fill:#ffebee,stroke-dasharray: 5 5
-```
+### How It Works
+
+1. **Developer writes policy in plain English**: "Allow payments up to $50, block sanctioned entities"
+2. **MCP client converts to structured format**: IDE's LLM creates intermediate JSON
+3. **Policy Builder generates Cerbos YAML**: Validated, secure, production-ready
+4. **Automatic validation**: Cerbos CLI checks syntax and runs tests
+5. **Security analysis**: 5 essential security checks built-in
+
+**Key Terms**:
+- **ICP**: Intermediate Canonical Policy - lightweight JSON format between IDE and server
+- **Cerbos**: Open-source authorization engine that evaluates policies
+- **MCP**: Model Context Protocol - standard for AI tool integration
 
 ---
 
@@ -135,40 +127,35 @@ flowchart TD
 
 ## System Architecture
 
-### High-Level Data Flow
+### System Architecture
 
 ```mermaid
 flowchart TD
-    A["User: Natural Language Policy Request"] --> B["MCP Client IDE"]
-    B --> C["MCP Tool Call"]
-    C --> D["Policy Builder Server"]
-    D --> E["generate_policy_tool()"]
-    E --> F{"Has ICP?"}
-    F -->|"Yes"| G["_generate_from_icp()"]
-    F -->|"No"| H["_handle_natural_language()"]
-    H --> I["Optional Server LLM"]
-    I --> G
-    G --> J["SimpleICP.model_validate()"]
-    J --> K["ICPValidator.validate()"]
-    K --> L["CerbosGenerator"]
-    L --> M["CerbosCLI.compile()"]
-    M --> N["CerbosCLI.test()"]
-    N --> O["_format_policy_response()"]
+    A["Natural Language Policy"] --> B["MCP Client IDE"]
+    B --> C["Policy Builder Server"]
+    C --> D{"Input Format?"}
+    D -->|"Plain English"| E["Optional Server LLM"]
+    D -->|"Structured JSON"| F["Validation Pipeline"]
+    E --> F
+    F --> G["Cerbos YAML Generator"]
+    G --> H["CLI Validation & Testing"]
+    H --> I["Security Analysis"]
+    I --> J["Production-Ready Policy"]
     
-    P["TemplateLibrary"] --> D
-    Q["SimpleRedTeamAnalyzer"] --> O
+    K["Template Library"] --> C
     
     style A fill:#e3f2fd
-    style O fill:#e8f5e8
-    style D fill:#fff3e0
-    style I fill:#ffebee,stroke-dasharray: 5 5
+    style J fill:#e8f5e8
+    style C fill:#fff3e0
+    style E fill:#ffebee,stroke-dasharray: 5 5
 ```
 
-**Key Design Principles:**
-- **Natural Language First**: Developers author in plain English, not JSON or YAML
-- **Deterministic Generation**: Same natural language → same policy YAML every time
-- **Security by Default**: Every generated policy includes essential security patterns
-- **Validation Built-in**: Policies validated with Cerbos CLI before delivery
+**Architecture Principles:**
+- **Natural Language First**: Write policies like requirements, not code
+- **Deterministic Output**: Same input → same policy YAML every time
+- **Security by Default**: Essential security patterns built into every policy
+- **Validation Built-in**: Cerbos CLI validates before delivery
+- **Air-gapped Capable**: Works locally without external API calls
 
 ---
 
