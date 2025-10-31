@@ -1,4 +1,4 @@
-"""List templates tool implementation."""
+"""List templates tool - template discovery."""
 
 from typing import Dict, Any
 

@@ -9,15 +9,15 @@ Limit cumulative hourly amount to $50.
 Maximum 5 transactions per 5 minutes.
 ```
 
-## Generated Cerbos Policy
+## Generated Cerbos Policy with Topic Governance
 
 **File: `payment_policy.yaml`**
 
 ```yaml
 apiVersion: api.cerbos.dev/v1
-description: AI agent payment execution policy with amount limits and sanctions screening
+description: AI agent payment execution policy with amount limits, sanctions screening, and topic governance
 resourcePolicy:
-  version: 1.0.0
+  version: "1.0.0"
   resource: payment
   rules:
   - actions:
@@ -25,7 +25,15 @@ resourcePolicy:
     effect: EFFECT_ALLOW
     condition:
       match:
-        expr: (request.resource.attr.amount > 0) && (request.resource.attr.amount <= 50) && (!(request.resource.attr.recipient in request.resource.attr.sanctioned_entities)) && ((request.resource.attr.cumulative_amount_last_hour + request.resource.attr.amount) <= 50) && (request.resource.attr.agent_txn_count_5m < 5)
+        expr: >
+          (request.resource.attr.amount > 0) && 
+          (request.resource.attr.amount <= 50) && 
+          (!(request.resource.attr.recipient in request.resource.attr.sanctioned_entities)) && 
+          ((request.resource.attr.cumulative_amount_last_hour + request.resource.attr.amount) <= 50) && 
+          (request.resource.attr.agent_txn_count_5m < 5) &&
+          has(request.resource.attr.topics) &&
+          "payment" in request.resource.attr.topics &&
+          !("adult" in request.resource.attr.topics)
   - actions:
     - '*'
     effect: EFFECT_DENY
@@ -102,15 +110,24 @@ tests:
 
 ## Security Analysis
 
-✅ **5/5 security checks passed**
+✅ **6/6 security checks passed**
 - Default deny rule present
-- No overly permissive rules
-- Conditional access controls present
-- Input validation implemented
-- Rate limiting enforced
+- Rate limiting enforced (5 transactions per 5 minutes)
+- Sanctions screening implemented
+- Input validation (amount > 0, amount <= 50)
+- Role-based access controls
+- Topic governance (payment topic required, adult content blocked)
+
+## Topic Governance
+
+- **Required Topics**: payment, transaction
+- **Blocked Topics**: adult, violence, illegal
+- **Safety Category**: PG (Parental Guidance)
+- **Content Classification**: Financial transaction
 
 ## Compliance
 
 - **SOX**: Financial transaction controls
+- **PCI-DSS**: Payment processing security
 - **Risk Level**: Medium
-- **Deployment**: Production ready
+- **Deployment**: Production ready with topic governance

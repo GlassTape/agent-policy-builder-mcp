@@ -15,7 +15,8 @@ async def test_generate_policy():
         "metadata": {
             "name": "test_policy",
             "description": "Test policy for validation",
-            "resource": "test"
+            "resource": "test",
+            "safety_category": "G"
         },
         "policy": {
             "resource": "test",
@@ -67,7 +68,7 @@ async def test_generate_policy():
 async def test_generate_policy_missing_icp():
     """Test policy generation with missing ICP."""
     result = await generate_policy_tool({})
-    assert "Error: 'icp' parameter required" in result
+    assert "Generate Policy" in result  # Returns usage guidance
 
 
 @pytest.mark.asyncio
@@ -98,7 +99,7 @@ resourcePolicy:
       effect: EFFECT_ALLOW
 """
     result = await validate_policy_tool({"policy_yaml": policy_yaml})
-    assert "Policy validation" in result
+    assert "Policy Validation" in result
 
 
 @pytest.mark.asyncio

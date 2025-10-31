@@ -48,6 +48,9 @@ class SimpleRedTeamAnalyzer:
         # Check 5: Role-based access
         findings.append(self._check_role_based_access(icp or {}, policy_yaml))
         
+        # Check 6: Topic-based governance
+        findings.append(self._check_topic_governance(icp or {}, policy_yaml))
+        
         return findings
     
     def format_findings(self, findings: list[RedTeamFinding]) -> str:
@@ -58,7 +61,7 @@ class SimpleRedTeamAnalyzer:
         warned = sum(1 for f in findings if f.status == 'warn')
         failed = sum(1 for f in findings if f.status == 'fail')
         
-        output += f"**Score**: {passed}/5 checks passed\n\n"
+        output += f"**Score**: {passed}/6 checks passed\n\n"
         
         for finding in findings:
             status_emoji = {
@@ -206,6 +209,39 @@ class SimpleRedTeamAnalyzer:
             check='Role-Based Access',
             status='warn',
             message='No role restrictions found. Consider adding role-based access control'
+        )
+    
+    def _check_topic_governance(self, icp: Dict[str, Any], policy_yaml: str) -> RedTeamFinding:
+        """Check for topic-based governance controls."""
+        has_topics = False
+        topic_info = []
+        
+        # Check ICP structure first
+        if icp and 'metadata' in icp:
+            metadata = icp['metadata']
+            if metadata.get('topics'):
+                has_topics = True
+                topic_info.extend(metadata['topics'])
+            if metadata.get('blocked_topics'):
+                has_topics = True
+                topic_info.extend([f"blocked:{t}" for t in metadata['blocked_topics']])
+        
+        # Fallback to YAML analysis
+        if not has_topics and 'topics' in policy_yaml:
+            has_topics = True
+            topic_info = ['topics detected in YAML']
+        
+        if has_topics:
+            return RedTeamFinding(
+                check='Topic Governance',
+                status='pass',
+                message=f'Topic-based governance implemented: {", ".join(topic_info[:5])}'
+            )
+        
+        return RedTeamFinding(
+            check='Topic Governance',
+            status='warn',
+            message='No topic governance found. Consider adding topic-based access control for content filtering'
         )
 
 

@@ -16,6 +16,9 @@ class ICPMetadata(BaseModel):
     name: str = Field(..., description="Policy name (snake_case)")
     description: str = Field(..., description="Policy description")
     resource: str = Field(..., description="Resource type")
+    topics: List[str] = Field(default_factory=list, description="Content topics for governance")
+    blocked_topics: List[str] = Field(default_factory=list, description="Explicitly blocked topics")
+    safety_category: Optional[str] = Field(default=None, description="Content safety rating: G|PG|PG_13|R|adult_content")
     compliance: Optional[List[str]] = Field(default_factory=list, description="Compliance frameworks")
     tags: Optional[List[str]] = Field(default_factory=list, description="Policy tags")
 

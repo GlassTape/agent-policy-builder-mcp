@@ -1,8 +1,8 @@
-"""Validate policy tool implementation."""
+"""Validate policy tool - Cerbos CLI validation."""
 
 from typing import Dict, Any
 
-from ..cerbos_cli import CerbosCLI
+from .shared_utils import PolicyPipeline, format_validation_results
 
 
 async def validate_policy_tool(args: Dict[str, Any]) -> str:
@@ -13,26 +13,17 @@ async def validate_policy_tool(args: Dict[str, Any]) -> str:
         return "Error: 'policy_yaml' parameter required."
     
     try:
-        cerbos_cli = CerbosCLI()
+        pipeline = PolicyPipeline()
         
-        if not cerbos_cli.check_installation():
+        if not pipeline.cerbos_cli.check_installation():
             return "❌ Cerbos CLI not found. Install with: brew install cerbos/tap/cerbos"
         
-        validation_result = cerbos_cli.compile(policy_yaml)
+        validation_result, _ = pipeline.validate_with_cerbos(policy_yaml)
         
-        if validation_result.success:
-            response = "✅ Policy validation passed!\n\n"
-            if validation_result.warnings:
-                response += "## Warnings\n\n"
-                for warning in validation_result.warnings:
-                    response += f"- {warning}\n"
-            return response
-        else:
-            response = "❌ Policy validation failed\n\n"
-            response += "## Errors\n\n"
-            for error in validation_result.errors:
-                response += f"- {error}\n"
-            return response
-            
+        response = "# 🔍 Policy Validation\n\n"
+        response += format_validation_results(validation_result)
+        
+        return response
+        
     except Exception as e:
         return f"Error validating policy: {str(e)}"

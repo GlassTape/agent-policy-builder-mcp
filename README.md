@@ -13,10 +13,11 @@ It enables security and engineering teams to integrate **AI agents and applicati
 
 - ⚙️ **Natural-Language to Policy** – Generate Cerbos policies from plain English using Claude or AWS Q
 - 🧠 **Automated Validation** – Uses the Cerbos CLI (`cerbos compile`, `cerbos test`) for syntax and logic checks
-- 🧪 **Red-Team Analysis** – Detects evasion, injection, and logic flaws automatically
+- 🧪 **Red-Team Analysis** – 6-point security analysis with automatic improvement suggestions
 - 🧩 **MCP Integration** – Works natively in IDEs like **Cursor**, **Zed**, and **Claude Desktop**
 - 🔒 **Air-Gapped Operation** – Local-first design with no external dependencies
-- 🧾 **Compliance Mapping** – Built-in templates for SOX, HIPAA, PCI-DSS, and EU AI Act
+- 🏷️ **Topic-Based Governance** – 40+ content topics with safety categorization
+- 🧾 **Compliance Templates** – Built-in templates for SOX, HIPAA, PCI-DSS, and EU AI Act
 
 ## 🚀 Quick Start
 
@@ -144,10 +145,9 @@ When connected via MCP, you can use these tools in Claude or your IDE:
 
 | Tool                   | What it does                                               |
 | ---------------------- | ---------------------------------------------------------- |
-| `generate_policy`      | Transform natural language → validated Cerbos YAML         |
+| `generate_policy`      | Transform natural language → validated Cerbos YAML with topic governance |
 | `validate_policy`      | Check policy syntax with `cerbos compile`                  |
-| `test_policy`          | Run test suites against your policy                        |
-| `suggest_improvements` | Analyze for security gaps (rate limits, SOD, sanctions)    |
+| `suggest_improvements` | 6-point security analysis with automatic improvement suggestions |
 | `list_templates`       | Browse built-in templates (finance, healthcare, AI safety) |
 
 **Example workflow:**
@@ -156,14 +156,14 @@ When connected via MCP, you can use these tools in Claude or your IDE:
 1. "Generate a payment policy for AI agents with $50 limit..."
    → Claude calls generate_policy
    
-2. "Create a comprehensive test suite for this policy"
-   → Claude calls generate_test_suite
+2. "Show me available financial templates"
+   → Claude calls list_templates
    
-3. "Add hourly spending limits and sanction checks"
+3. "Analyze this policy for security issues"
    → Claude calls suggest_improvements
    
-4. "Save this policy bundle"
-   → Claude calls save_policy
+4. "Validate the policy syntax"
+   → Claude calls validate_policy
 ```
 
 ## 🧪 Example Output
@@ -175,7 +175,7 @@ When connected via MCP, you can use these tools in Claude or your IDE:
 Limit cumulative hourly amount to $50. Maximum 5 transactions per 5 minutes."
 ```
 
-**Generated Policy:**
+**Generated Policy with Topic Governance:**
 
 ```yaml
 # policies/payment_policy.yaml
@@ -193,15 +193,21 @@ resourcePolicy:
             request.resource.attr.amount <= 50 &&
             !(request.resource.attr.recipient in request.resource.attr.sanctioned_entities) &&
             (request.resource.attr.cumulative_amount_last_hour + request.resource.attr.amount) <= 50 &&
-            request.resource.attr.agent_txn_count_5m < 5
+            request.resource.attr.agent_txn_count_5m < 5 &&
+            has(request.resource.attr.topics) &&
+            "payment" in request.resource.attr.topics &&
+            !("adult" in request.resource.attr.topics)
     - actions: ["*"]
       effect: EFFECT_DENY
 ```
 
 **Plus:**
 
+* ✅ Topic-based governance (payment, pii detection)
+* ✅ Safety categorization (G/PG/PG_13/R/adult_content)
 * ✅ 15+ automated test cases
 * ✅ Validated by `cerbos compile`
+* ✅ 6-point security analysis
 * ✅ Ready-to-deploy bundle
 
 ## 📋 Complete Examples

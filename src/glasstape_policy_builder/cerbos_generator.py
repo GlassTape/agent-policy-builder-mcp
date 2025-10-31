@@ -24,7 +24,7 @@ class CerbosGenerator:
                 'resourcePolicy': {
                     'version': icp['policy']['version'],
                     'resource': icp['policy']['resource'],
-                    'rules': [self._transform_rule(rule) for rule in icp['policy']['rules']]
+                    'rules': [self._transform_rule(rule, icp) for rule in icp['policy']['rules']]
                 }
             }
             
@@ -57,7 +57,7 @@ class CerbosGenerator:
         except Exception as e:
             raise ValueError(f"Failed to generate test YAML: {e}")
     
-    def _transform_rule(self, rule: Dict[str, Any]) -> Dict[str, Any]:
+    def _transform_rule(self, rule: Dict[str, Any], icp: Dict[str, Any] = None) -> Dict[str, Any]:
         """Transform ICP rule to Cerbos rule"""
         try:
             cerbos_rule = {
@@ -69,11 +69,28 @@ class CerbosGenerator:
             if rule.get('roles'):
                 cerbos_rule['roles'] = rule['roles']
             
-            # Add conditions if specified
-            if rule.get('conditions'):
+            # Build conditions including topic-based rules
+            conditions = list(rule.get('conditions', []))
+            
+            # Add topic conditions from metadata
+            if icp and 'metadata' in icp:
+                metadata = icp['metadata']
+                
+                # Add allowed topics condition
+                if metadata.get('topics'):
+                    topics_condition = self._build_topics_condition(metadata['topics'], 'allow')
+                    conditions.append(topics_condition)
+                
+                # Add blocked topics condition
+                if metadata.get('blocked_topics'):
+                    blocked_condition = self._build_topics_condition(metadata['blocked_topics'], 'block')
+                    conditions.append(blocked_condition)
+            
+            # Add conditions if any exist
+            if conditions:
                 cerbos_rule['condition'] = {
                     'match': {
-                        'expr': self._build_expr(rule['conditions'])
+                        'expr': self._build_expr(conditions)
                     }
                 }
             
@@ -113,4 +130,17 @@ class CerbosGenerator:
         """Build CEL expression from conditions"""
         # Join conditions with AND, wrapping each in parentheses
         return ' && '.join(f'({c})' for c in conditions)
+    
+    def _build_topics_condition(self, topics: list[str], mode: str) -> str:
+        """Build topic-based condition."""
+        if mode == 'allow':
+            # At least one allowed topic must be present
+            topic_checks = [f"'{topic}' in request.resource.attr.topics" for topic in topics]
+            return f"({' || '.join(topic_checks)})"
+        elif mode == 'block':
+            # No blocked topics should be present
+            topic_checks = [f"!('{topic}' in request.resource.attr.topics)" for topic in topics]
+            return f"({' && '.join(topic_checks)})"
+        else:
+            raise ValueError(f"Invalid topic condition mode: {mode}")
 

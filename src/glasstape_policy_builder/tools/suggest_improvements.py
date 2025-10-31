@@ -1,29 +1,26 @@
-"""Security analysis tool implementation."""
+"""Security analysis tool - red team analysis and improvements."""
 
-import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from ..redteam_analyzer import SimpleRedTeamAnalyzer
+from .shared_utils import PolicyPipeline
 
 
 async def suggest_improvements_tool(args: Dict[str, Any]) -> str:
-    """Analyze policy for security issues using 5 essential checks."""
+    """Analyze policy for security issues using 6 essential checks."""
     policy_yaml = args.get("policy_yaml", "")
-    icp_json = args.get("icp_json")
+    icp_data = args.get("icp")
     
     if not policy_yaml:
         return "Error: 'policy_yaml' parameter required."
     
-    # Parse optional ICP JSON for deeper analysis
-    icp = None
-    if icp_json:
-        try:
-            icp = json.loads(icp_json) if isinstance(icp_json, str) else icp_json
-        except (json.JSONDecodeError, TypeError):
-            pass  # Continue without ICP data
-    
-    # Run security analysis
-    analyzer = SimpleRedTeamAnalyzer()
-    findings = analyzer.analyze(policy_yaml, icp)
-    
-    return analyzer.format_findings(findings)
+    try:
+        pipeline = PolicyPipeline()
+        findings = pipeline.analyze_security(policy_yaml, icp_data)
+        
+        response = "# 🔒 Security Analysis\n\n"
+        response += pipeline.analyzer.format_findings(findings)
+        
+        return response
+        
+    except Exception as e:
+        return f"Error analyzing policy: {str(e)}"

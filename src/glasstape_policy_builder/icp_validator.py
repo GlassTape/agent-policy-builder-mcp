@@ -1,6 +1,7 @@
 """ICP Validator - Validates Simple ICP JSON structure."""
 
 from typing import Any, Dict
+from .topic_taxonomy import taxonomy
 
 
 class ICPValidator:
@@ -55,6 +56,20 @@ class ICPValidator:
         # Compliance should be array if present
         if 'compliance' in metadata and not isinstance(metadata['compliance'], list):
             raise ValueError("Metadata compliance must be an array")
+        
+        # Validate topics if present
+        if 'topics' in metadata:
+            self._validate_topics(metadata['topics'])
+        
+        # Validate blocked_topics if present
+        if 'blocked_topics' in metadata:
+            self._validate_topics(metadata['blocked_topics'])
+        
+        # Validate safety_category if present
+        if 'safety_category' in metadata:
+            valid_categories = ["G", "PG", "PG_13", "R", "adult_content"]
+            if metadata['safety_category'] not in valid_categories:
+                raise ValueError(f"Invalid safety_category. Must be one of: {valid_categories}")
     
     def _validate_policy(self, policy: Dict[str, Any]) -> None:
         """Validate policy section"""
@@ -143,4 +158,18 @@ class ICPValidator:
             raise ValueError(f"Test {index} input missing 'resource'")
         if 'actions' not in test_input:
             raise ValueError(f"Test {index} input missing 'actions'")
+    
+    def _validate_topics(self, topics: list) -> None:
+        """Validate topic list against taxonomy."""
+        if not isinstance(topics, list):
+            raise ValueError("Topics must be an array")
+        
+        validation_result = taxonomy.validate_topics(topics)
+        
+        if validation_result["invalid"]:
+            available_topics = taxonomy.get_all_topics()
+            raise ValueError(
+                f"Invalid topics: {validation_result['invalid']}. "
+                f"Available topics: {', '.join(available_topics[:10])}..."
+            )
 

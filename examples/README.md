@@ -21,7 +21,7 @@ Limit cumulative hourly amount to $50.
 Maximum 5 transactions per 5 minutes.
 ```
 
-### What You Get (Cerbos YAML)
+### What You Get (Cerbos YAML with Topic Governance)
 
 **`payment_policy_output.yaml`** - Ready to deploy with Cerbos:
 
@@ -29,27 +29,23 @@ Maximum 5 transactions per 5 minutes.
 apiVersion: api.cerbos.dev/v1
 resourcePolicy:
   resource: payment
-  mandates:
-    - actions: ["*"]
-      roles: ["admin", "finance"]
-  schemas:
-    principalSchema:
-      ref: cerbos:///principal.json
-    resourceSchema:
-      ref: cerbos:///payment.json
+  version: "1.0.0"
   rules:
     - actions:
         - execute
-      effect: ALLOW
+      effect: EFFECT_ALLOW
       condition:
         match:
           expr: |
             request.resource.attr.amount <= 50 &&
             !(request.resource.attr.recipient in request.resource.attr.sanctioned_entities) &&
             (request.resource.attr.cumulative_amount_last_hour + request.resource.attr.amount) <= 50 &&
-            request.resource.attr.agent_txn_count_5m < 5
+            request.resource.attr.agent_txn_count_5m < 5 &&
+            has(request.resource.attr.topics) &&
+            "payment" in request.resource.attr.topics &&
+            !("adult" in request.resource.attr.topics)
     - actions: ["*"]
-      effect: DENY
+      effect: EFFECT_DENY
 ```
 
 Plus **`payment_policy_tests.yaml`** - Comprehensive test suite!
@@ -74,7 +70,14 @@ Plus **`payment_policy_tests.yaml`** - Comprehensive test suite!
    up to $50, blocks sanctioned entities, and limits to 5 transactions per 5 minutes.
    ```
 
-2. **Get ready-to-deploy YAML** - No JSON, no intermediary formats, just production-ready Cerbos policies!
+2. **Get enhanced YAML with topic governance** - Includes content categorization, safety levels, and compliance markers!
+
+3. **Additional tools available**:
+   ```
+   list_templates(category="financial")          # Browse templates
+   validate_policy(policy_yaml="...")           # Syntax validation
+   suggest_improvements(policy_yaml="...")      # Security analysis
+   ```
 
 ### Template Categories
 

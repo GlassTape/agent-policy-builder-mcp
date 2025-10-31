@@ -116,7 +116,8 @@ AI agents require **policy-as-code** that survives model changes and framework m
 
 ✅ **Natural language → Cerbos YAML** (via MCP client's LLM; no server SDKs or keys required)  
 ✅ **Validation & tests** with [Cerbos CLI](https://docs.cerbos.dev/cerbos/latest/cli) (`cerbos compile`, `cerbos test`)  
-✅ **Basic security analysis** (5 checks: default-deny, rate limits, sanctions, input validation, roles)  
+✅ **Enhanced security analysis** (6 checks: default-deny, rate limits, sanctions, input validation, roles, topic governance)  
+✅ **Topic-based governance** (40+ topics across 6 categories with safety classification)  
 ✅ **Template library** (finance, healthcare, AI safety, data access, system)  
 ✅ **Local-first / air-gapped operation** by default  
 ✅ **Optional server-side LLM adapter** (env-gated) for teams without LLM-capable IDEs  
@@ -177,7 +178,7 @@ flowchart TD
 
 ## MCP Tools
 
-The Policy Builder implements 5 core [MCP tools](https://modelcontextprotocol.io/docs/concepts/tools) that integrate seamlessly with MCP-compatible IDEs:
+The Policy Builder implements 4 core [MCP tools](https://modelcontextprotocol.io/docs/concepts/tools) that integrate seamlessly with MCP-compatible IDEs:
 
 ### generate_policy — Primary Tool
 **Purpose**: Convert natural language guardrails into validated Cerbos YAML policies
@@ -206,29 +207,107 @@ The Policy Builder implements 5 core [MCP tools](https://modelcontextprotocol.io
 
 **Output**: Success/failure with errors and warnings
 
-### test_policy
+### validate_policy
 **Parameters**: 
 - `policy_yaml` (string, required)
-- `test_yaml` (string, required)
 
-**Behavior**: Runs test suite against policy using `cerbos test`
+**Behavior**: Validates Cerbos YAML syntax using `cerbos compile`
 
-**Output**: Pass/fail counts and detailed test results
+**Output**: Success/failure with errors and warnings
 
 ### suggest_improvements
 **Parameters**: 
 - `policy_yaml` (string, required) - Cerbos YAML policy to analyze
+- `icp` (object, optional) - ICP JSON for enhanced analysis
 
-**Behavior**: Analyzes policy for security issues using [SimpleRedTeamAnalyzer](../src/glasstape_policy_builder/redteam_analyzer.py) with 5 essential checks:
+**Behavior**: Analyzes policy for security issues using [SimpleRedTeamAnalyzer](../src/glasstape_policy_builder/redteam_analyzer.py) with 6 essential checks:
 1. **Default Deny**: Verifies last rule denies all actions ("*") with EFFECT_DENY
 2. **Rate Limiting**: Detects rate limiting patterns (cumulative, count, frequency keywords)
 3. **Sanctions Screening**: Checks for blocklist/sanctions screening logic
 4. **Input Validation**: Identifies input validation patterns (type checks, range validation)
 5. **Role-Based Access**: Verifies role restrictions are implemented
+6. **Topic Governance**: Validates topic-based content controls and safety categories
 
 **Output**: Formatted markdown report with:
-- Security score (X/5 checks passed)
-- Individual check results with ✅ pass, ⚠️ warn, or ❌ fail status
+- Security score (X/6 checks passed)
+- Individual check results with severity levels
+- Specific recommendations for improvement
+- Topic governance validation results
+
+### list_templates
+**Parameters**: 
+- `category` (string, optional) - Template category to filter by
+
+**Behavior**: Lists available policy templates from the built-in template library
+
+**Output**: Formatted template listing with categories:
+- Financial (payment, transaction, billing)
+- Healthcare (HIPAA, PHI access, patient records)
+- AI Safety (model invocation, content filtering)
+- Data Access (PII export, GDPR compliance)
+- System (admin access, infrastructure)
+
+---
+
+## Topic-Based Governance System
+
+### Topic Taxonomy
+The Policy Builder includes a comprehensive topic taxonomy with 40+ topics across 6 categories:
+
+- **Financial**: payment, transaction, billing, refund, invoice, banking, credit, loan
+- **Privacy**: pii, phi, personal_data, medical_record, ssn, credit_card, address, phone
+- **Healthcare**: medical, healthcare, patient, diagnosis, treatment, prescription, hospital
+- **Content Safety**: adult, violence, illegal, hate_speech, harassment, discrimination
+- **Business**: recipe, cooking, automotive, legal, education, travel, entertainment
+- **System**: admin, configuration, deployment, security, database, api, infrastructure
+
+### Safety Categories
+Content is classified into safety levels:
+- **G**: General audiences, safe for all users
+- **PG**: Parental guidance suggested
+- **PG_13**: Parents strongly cautioned
+- **R**: Restricted content
+- **adult_content**: Explicit/adult content
+
+### Topic-Aware Policy Generation
+Policies automatically include topic-based conditions:
+```yaml
+condition:
+  match:
+    expr: >
+      has(request.resource.attr.topics) &&
+      "payment" in request.resource.attr.topics &&
+      !("adult" in request.resource.attr.topics)
+```
+
+---
+
+## Security Analysis Framework
+
+The `suggest_improvements` tool performs comprehensive security analysis:
+
+### 6-Point Security Checklist
+1. **Default Deny Validation**: Ensures policies end with explicit deny-all rule
+2. **Rate Limiting Detection**: Identifies and validates rate limiting patterns
+3. **Sanctions Screening**: Checks for blocklist and sanctions compliance
+4. **Input Validation**: Verifies input sanitization and validation patterns
+5. **Role-Based Access**: Confirms proper role and permission restrictions
+6. **Topic Governance**: Validates topic-based content controls
+
+### Severity Levels
+- **CRITICAL**: Immediate security risk requiring urgent attention
+- **HIGH**: Significant security gap that should be addressed
+- **MEDIUM**: Security improvement recommended
+- **LOW**: Minor enhancement suggestion
+- **INFO**: Informational finding for awareness
+
+### Automatic Improvements
+When security issues are detected, the tool can automatically generate improved policies with:
+- Enhanced rate limiting
+- Strengthened access controls
+- Topic-based content filtering
+- Compliance markers
+- Security hardening tagseck results with ✅ pass, ⚠️ warn, or ❌ fail status
 - Specific improvement recommendations for each failed/warned check
 - Overall readiness assessment
 
