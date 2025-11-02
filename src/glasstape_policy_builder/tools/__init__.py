@@ -8,6 +8,7 @@ from .generate_policy import generate_policy_tool
 from .validate_policy import validate_policy_tool
 from .suggest_improvements import suggest_improvements_tool
 from .list_templates import list_templates_tool
+from .test_policy import test_policy_tool
 
 
 async def register_tools(server: Server):
@@ -62,6 +63,24 @@ async def register_tools(server: Server):
                     "type": "object",
                     "properties": {"category": {"type": "string"}}
                 }
+            ),
+            types.Tool(
+                name="test_policy",
+                description="Run cerbos test on policy and test suite",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "policy_yaml": {
+                            "type": "string",
+                            "description": "Cerbos policy YAML content"
+                        },
+                        "test_yaml": {
+                            "type": "string", 
+                            "description": "Cerbos test suite YAML content"
+                        }
+                    },
+                    "required": ["policy_yaml", "test_yaml"]
+                }
             )
         ]
     
@@ -82,6 +101,8 @@ async def register_tools(server: Server):
                 result = await suggest_improvements_tool(arguments)
             elif name == "list_templates":
                 result = await list_templates_tool(arguments)
+            elif name == "test_policy":
+                result = await test_policy_tool(arguments)
             else:
                 return [types.TextContent(type="text", text=f"Unknown tool: {name}")]
             

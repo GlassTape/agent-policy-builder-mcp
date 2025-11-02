@@ -3,6 +3,7 @@
 import subprocess
 import tempfile
 import re
+import yaml
 from pathlib import Path
 from typing import Optional
 
@@ -95,7 +96,7 @@ class CerbosCLI:
     
     def test(self, policy_yaml: str, test_yaml: str) -> TestResult:
         """
-        Run tests with cerbos test
+        Run tests with cerbos compile (includes testing)
         
         Args:
             policy_yaml: Cerbos policy YAML string
@@ -105,23 +106,34 @@ class CerbosCLI:
             TestResult with pass/fail counts and details
         """
         try:
+            # Extract resource name from policy for correct test file naming
+            # Cerbos expects test files as {resource}_test.yaml
+            resource_name = "policy"  # Default fallback
+            try:
+                policy_data = yaml.safe_load(policy_yaml)
+                if policy_data and 'resourcePolicy' in policy_data:
+                    resource_name = policy_data['resourcePolicy'].get('resource', 'policy')
+            except (yaml.YAMLError, KeyError, AttributeError):
+                pass  # Use default if parsing fails
+            
             # Setup files
             policy_file = self.work_dir / "policy.yaml"
-            test_file = self.work_dir / "test.yaml"
+            test_file = self.work_dir / f"{resource_name}_test.yaml"  # Correct naming convention
             
             policy_file.write_text(policy_yaml)
             test_file.write_text(test_yaml)
             
-            # Run cerbos test
+            # Run cerbos compile (which includes tests)
             result = subprocess.run(
-                ['cerbos', 'test', str(self.work_dir)],
+                ['cerbos', 'compile', str(self.work_dir)],
                 capture_output=True,
                 text=True,
                 timeout=60,
                 shell=False  # Prevent shell injection
             )
             
-            return self._parse_test_output(result.stdout)
+            output = result.stdout + result.stderr
+            return self._parse_test_output(output)
             
         except subprocess.TimeoutExpired:
             raise RuntimeError("Test execution timeout")
@@ -150,17 +162,26 @@ class CerbosCLI:
     
     def _parse_test_output(self, output: str) -> TestResult:
         """Parse Cerbos test output"""
-        # Parse "X passed, Y failed" format
-        passed_match = re.search(r'(\d+)\s+passed', output)
-        failed_match = re.search(r'(\d+)\s+failed', output)
+        # Parse "X tests executed [Y OK]" or "X tests executed\n [Y FAILED]" format
+        executed_match = re.search(r'(\d+)\s+tests?\s+executed', output)
+        ok_match = re.search(r'\[(\d+)\s+OK\]', output)
+        failed_match = re.search(r'\[(\d+)\s+FAILED\]', output)
         
-        passed = int(passed_match.group(1)) if passed_match else 0
+        total = int(executed_match.group(1)) if executed_match else 0
+        passed = int(ok_match.group(1)) if ok_match else 0
         failed = int(failed_match.group(1)) if failed_match else 0
+        
+        # If we have total but no explicit passed/failed, calculate
+        if total > 0 and passed == 0 and failed == 0:
+            if "FAILED" in output:
+                failed = total
+            else:
+                passed = total
         
         return TestResult(
             passed=passed,
             failed=failed,
-            total=passed + failed,
+            total=total,
             details=output
         )
 

@@ -100,3 +100,8 @@ def format_policy_metadata(icp: SimpleICP) -> str:
         response += f"**Compliance**: {', '.join(icp.metadata.compliance)}\n"
     
     return response + "\n" if response else ""
+
+
+def format_error(message: str) -> str:
+    """Format error message consistently."""
+    return f"❌ **Error**: {message}"

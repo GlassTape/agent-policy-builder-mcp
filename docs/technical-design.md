@@ -178,7 +178,7 @@ flowchart TD
 
 ## MCP Tools
 
-The Policy Builder implements 4 core [MCP tools](https://modelcontextprotocol.io/docs/concepts/tools) that integrate seamlessly with MCP-compatible IDEs:
+The Policy Builder implements 5 core [MCP tools](https://modelcontextprotocol.io/docs/concepts/tools) that integrate seamlessly with MCP-compatible IDEs:
 
 ### generate_policy — Primary Tool
 **Purpose**: Convert natural language guardrails into validated Cerbos YAML policies
@@ -214,6 +214,18 @@ The Policy Builder implements 4 core [MCP tools](https://modelcontextprotocol.io
 **Behavior**: Validates Cerbos YAML syntax using `cerbos compile`
 
 **Output**: Success/failure with errors and warnings
+
+### test_policy
+**Parameters**: 
+- `policy_yaml` (string, required) - Cerbos policy YAML content
+- `test_yaml` (string, required) - Cerbos test suite YAML content
+
+**Behavior**: Executes test suites against policies using `cerbos compile` (which includes testing)
+
+**Output**: JSON with test results:
+- `status`: "passed" or "failed"
+- `summary`: Test counts (passed, failed, total)
+- `details`: Full Cerbos test output with pass/fail details
 
 ### suggest_improvements
 **Parameters**: 

@@ -147,6 +147,7 @@ When connected via MCP, you can use these tools in Claude or your IDE:
 | ---------------------- | ---------------------------------------------------------- |
 | `generate_policy`      | Transform natural language → validated Cerbos YAML with topic governance |
 | `validate_policy`      | Check policy syntax with `cerbos compile`                  |
+| `test_policy`          | Run test suites against policies with `cerbos compile`     |
 | `suggest_improvements` | 6-point security analysis with automatic improvement suggestions |
 | `list_templates`       | Browse built-in templates (finance, healthcare, AI safety) |
 
@@ -159,10 +160,13 @@ When connected via MCP, you can use these tools in Claude or your IDE:
 2. "Show me available financial templates"
    → Claude calls list_templates
    
-3. "Analyze this policy for security issues"
+3. "Test this policy with the test suite"
+   → Claude calls test_policy
+   
+4. "Analyze this policy for security issues"
    → Claude calls suggest_improvements
    
-4. "Validate the policy syntax"
+5. "Validate the policy syntax"
    → Claude calls validate_policy
 ```
 
